@@ -4,7 +4,7 @@
     "description": "A Quizziz-like application",
     "main": "index.js",
     "scripts": {
-      "start": "node src/index.js",
+    "start": "node --openssl-legacy-provider src/index.js"
       "build": "react-scripts build",
       "test": "react-scripts test",
       "eject": "react-scripts eject"
