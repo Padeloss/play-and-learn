@@ -1,0 +1,21 @@
+{
+    "name": "play-and-learn",
+    "version": "1.0.0",
+    "description": "A Quizziz-like application",
+    "main": "index.js",
+    "scripts": {
+      "start": "node src/index.js",
+      "build": "react-scripts build",
+      "test": "react-scripts test",
+      "eject": "react-scripts eject"
+    },
+    "author": "Padeloss",
+    "license": "MIT",
+    "dependencies": {
+      "express": "^4.17.1",
+      "mongoose": "^5.10.9",
+      "react": "^17.0.1",
+      "react-dom": "^17.0.1",
+      "react-scripts": "4.0.0"
+    }
+  }
