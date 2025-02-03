@@ -4,15 +4,15 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3003;
 
-// Εξυπηρετούμε στατικά αρχεία από τον φάκελο "public" αν υπάρχει
+// Εξυπηρετούμε στατικά αρχεία από τον φάκελο "public"
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Αντιμετωπίζουμε την περίπτωση που το index.html είναι στη ρίζα
+// Αν το index.html είναι στη ρίζα, το εξυπηρετούμε εδώ
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Για όλα τα άλλα routes, επίσης επιστρέφουμε το index.html
+// Για οποιοδήποτε άλλο route, επιστρέφουμε το index.html (για SPAs)
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
