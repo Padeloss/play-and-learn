@@ -4,15 +4,19 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3003;
 
-// Ορισμός του public ως στατικού φακέλου
+// Εντοπισμός του index.html από τη ρίζα του project
+const INDEX_HTML_PATH = path.join(__dirname, 'index.html');
+
+// Serve static αρχεία από το public
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Επιστροφή του index.html για οποιοδήποτε route (για SPA)
+// Για οποιοδήποτε route, επιστρέφουμε το index.html
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(INDEX_HTML_PATH);
 });
 
 // Εκκίνηση του server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+
