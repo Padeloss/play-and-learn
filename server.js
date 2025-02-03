@@ -1,11 +1,18 @@
 const express = require('express');
 const path = require('path');
-const app = express();
 
-// Serve static files from the "public" directory
+const app = express();
+const PORT = process.env.PORT || 3003;
+
+// Ορισμός του public ως στατικού φακέλου
 app.use(express.static(path.join(__dirname, 'public')));
 
-const PORT = process.env.PORT || 3003;
+// Επιστροφή του index.html για οποιοδήποτε route (για SPA)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Εκκίνηση του server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
