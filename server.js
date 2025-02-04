@@ -4,12 +4,12 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3003;
 
-// Σερβίρουμε στατικά αρχεία από τον φάκελο "public"
-app.use(express.static(path.join(__dirname, 'public')));
+// Σερβίρουμε στατικά αρχεία από τον ΚΕΝΤΡΙΚΟ φάκελο
+app.use(express.static(__dirname));
 
-// Αν το Vercel δεν βλέπει τον "public", δοκιμάζουμε και τον "__dirname"
+// Όλες οι διαδρομές να επιστρέφουν το index.html
 app.get('*', (req, res) => {
-  const indexPath = path.join(__dirname, 'public', 'index.html');
+  const indexPath = path.join(__dirname, 'index.html');
   console.log("Trying to serve:", indexPath);
 
   res.sendFile(indexPath, (err) => {
