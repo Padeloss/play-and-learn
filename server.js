@@ -4,10 +4,13 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3003;
 
-// Σερβίρουμε στατικά αρχεία από τον ΚΕΝΤΡΙΚΟ φάκελο
+// 📌 Βεβαιωνόμαστε ότι σερβίρουμε στατικά αρχεία από το ΚΕΝΤΡΙΚΟ φάκελο
 app.use(express.static(__dirname));
 
-// Όλες οι διαδρομές να επιστρέφουν το index.html
+// 📌 Αν υπάρχει `favicon.png`, το σερβίρουμε κανονικά
+app.use('/favicon.png', express.static(path.join(__dirname, 'favicon.png')));
+
+// 📌 Όλες οι διαδρομές να φορτώνουν το `index.html`
 app.get('*', (req, res) => {
   const indexPath = path.join(__dirname, 'index.html');
   console.log("Trying to serve:", indexPath);
