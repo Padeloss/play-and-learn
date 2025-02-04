@@ -4,20 +4,22 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3003;
 
-// Εξυπηρετούμε στατικά αρχεία από τον φάκελο "public"
+// Debug: Εκτυπώνουμε τη διαδρομή του index.html
+console.log("Serving index.html from:", path.join(__dirname, 'index.html'));
+
+// Σερβίρουμε στατικά αρχεία από το public
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Αν το index.html είναι στη ρίζα, το εξυπηρετούμε εδώ
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-// Για οποιοδήποτε άλλο route, επιστρέφουμε το index.html (για SPAs)
+// Σερβίρουμε το index.html
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+  res.sendFile(path.join(__dirname, 'index.html'), (err) => {
+    if (err) {
+      console.error("Error serving index.html:", err);
+      res.status(500).send("Error loading the page");
+    }
+  });
 });
 
-// Εκκίνηση server
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`✅ Server is running on port ${PORT}`);
 });
