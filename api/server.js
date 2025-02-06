@@ -4,24 +4,19 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3003;
 
-// 📌 Εξασφαλίζουμε ότι σερβίρονται τα στατικά αρχεία από τον φάκελο "public"
+// Σερβίρουμε στατικά αρχεία από τον φάκελο "public"
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 📌 Σερβίρουμε το favicon σωστά
-app.get('/favicon.ico', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'favicon.ico'));
-});
-
-// 📌 Σερβίρουμε σωστά το index.html από τον public/
+// Σερβίρουμε το index.html για όλες τις διαδρομές
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'), (err) => {
     if (err) {
-      console.error("Error serving index.html:", err);
-      res.status(500).send("Error loading the page");
+      console.error("Σφάλμα κατά την εξυπηρέτηση του index.html:", err);
+      res.status(500).send("Σφάλμα κατά τη φόρτωση της σελίδας");
     }
   });
 });
 
 app.listen(PORT, () => {
-  console.log(`✅ Server is running on port ${PORT}`);
+  console.log(`✅ Ο διακομιστής λειτουργεί στη θύρα ${PORT}`);
 });
