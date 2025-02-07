@@ -2,7 +2,7 @@
   "name": "play-and-learn",
   "version": "1.0.0",
   "description": "A Quizziz-like application",
-  "main": "index.js",
+  "main": "backend/index.js",
   "scripts": {
     "start": "cross-env NODE_OPTIONS=--openssl-legacy-provider react-scripts start",
     "build": "react-scripts build",
