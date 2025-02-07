@@ -1,20 +1,36 @@
-name: Install Express
+name: Deploy Backend to Vercel
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
-  install:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: Install Dependencies
+        run: npm install --force
+
       - name: Install Express
         run: npm install express --force
-      - name: Commit changes
+
+      - name: Commit package-lock.json (αν χρειάζεται)
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions@github.com'
           git add package-lock.json
-          git commit -m "Fix: Reinstall express"
+          git commit -m "Fix: Reinstall express" || echo "No changes to commit"
           git push
+
+      - name: Deploy to Vercel
+        run: npx vercel --prod --token=${{ secrets.VERCEL_TOKEN }}
