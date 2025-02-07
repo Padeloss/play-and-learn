@@ -9,6 +9,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
@@ -18,19 +19,18 @@ jobs:
         with:
           node-version: 20
 
+      - name: Clean npm cache
+        run: npm cache clean --force
+
       - name: Install Dependencies
         run: npm install --force
-
-      - name: Install Express
-        run: npm install express --force
 
       - name: Commit package-lock.json (αν χρειάζεται)
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions@github.com'
           git add package-lock.json
-          git commit -m "Fix: Reinstall express" || echo "No changes to commit"
-          git push
+          git diff --cached --quiet || (git commit -m "Fix: Reinstall dependencies" && git push)
 
       - name: Deploy to Vercel
         run: npx vercel --prod --token=${{ secrets.VERCEL_TOKEN }}
