@@ -1,20 +1,29 @@
+const fs = require('fs');
+const path = require('path');
 const express = require('express');
-const bodyParser = require('body-parser');
-const questions = require('./questions.json'); // Εδώ φορτώνουμε τις ερωτήσεις από τοπικό JSON
 
 const app = express();
-app.use(bodyParser.json());
+const lessonsPath = path.join(__dirname, 'lessons'); // Ο φάκελος με τα JSON
 
-// Route για να επιστρέφει τις ερωτήσεις
-app.get('/api/questions', (req, res) => {
-  res.json(questions);
+// Route για να επιστρέφει τις ερωτήσεις ενός μαθήματος
+app.get('/api/lessons/:lessonName', (req, res) => {
+  const lessonName = req.params.lessonName;
+  const filePath = path.join(lessonsPath, `${lessonName}.json`);
+
+  fs.readFile(filePath, 'utf8', (err, data) => {
+    if (err) {
+      return res.status(404).json({ error: 'Lesson not found' });
+    }
+    res.json(JSON.parse(data));
+  });
 });
 
+// Route ελέγχου λειτουργίας
 app.get('/', (req, res) => {
-  res.send('✅ Hello, Play and Learn! Backend is working.');
+  res.send('✅ Backend is working. Lessons are loading from JSON.');
 });
 
-// Server listen μόνο αν δεν είμαστε σε Vercel
+// Αν το τρέχεις τοπικά, άνοιξε server
 if (process.env.NODE_ENV !== "production") {
   app.listen(3000, () => console.log("🚀 Server running on port 3000"));
 }
