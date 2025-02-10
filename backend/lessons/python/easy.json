@@ -1,0 +1,102 @@
+[
+    {
+        "question": "Πώς εκτυπώνεις 'Hello World' στην Python?",
+        "choices": [
+            "1. echo 'Hello World'",
+            "2. print('Hello World')",
+            "3. Console.WriteLine('Hello World')",
+            "4. printf('Hello World')"
+        ],
+        "answer": "2"
+    },
+    {
+        "question": "Ποιος είναι ο τύπος δεδομένων για έναν ακέραιο στην Python;",
+        "choices": [
+            "1. int",
+            "2. float",
+            "3. str",
+            "4. bool"
+        ],
+        "answer": "1"
+    },
+    {
+        "question": "Πώς ορίζεις μια μεταβλητή στην Python;",
+        "choices": [
+            "1. let x = 10",
+            "2. x := 10",
+            "3. x = 10",
+            "4. var x = 10"
+        ],
+        "answer": "3"
+    },
+    {
+        "question": "Ποιο σύμβολο χρησιμοποιείται για σχόλια στην Python;",
+        "choices": [
+            "1. //",
+            "2. /*",
+            "3. #",
+            "4. <!--"
+        ],
+        "answer": "3"
+    },
+    {
+        "question": "Πώς ελέγχεις αν το x είναι ίσο με το 5 στην Python;",
+        "choices": [
+            "1. if x == 5:",
+            "2. if (x equals 5):",
+            "3. if x = 5:",
+            "4. if x eq 5:"
+        ],
+        "answer": "1"
+    },
+    {
+        "question": "Ποια μέθοδος χρησιμοποιείται για να βρεις το μήκος μιας λίστας;",
+        "choices": [
+            "1. length()",
+            "2. count()",
+            "3. len()",
+            "4. size()"
+        ],
+        "answer": "3"
+    },
+    {
+        "question": "Πώς γράφεις μια συνθήκη στην Python;",
+        "choices": [
+            "1. if (x > 10):",
+            "2. when x > 10:",
+            "3. if x > 10 then:",
+            "4. if x is greater than 10:"
+        ],
+        "answer": "1"
+    },
+    {
+        "question": "Πώς δημιουργείς μια λίστα στην Python;",
+        "choices": [
+            "1. list = {}",
+            "2. list = []",
+            "3. list = ()",
+            "4. list = <>"
+        ],
+        "answer": "2"
+    },
+    {
+        "question": "Πώς προσθέτεις ένα στοιχείο σε μια λίστα;",
+        "choices": [
+            "1. list.append(item)",
+            "2. list.add(item)",
+            "3. list.push(item)",
+            "4. list.insert(item)"
+        ],
+        "answer": "1"
+    },
+    {
+        "question": "Ποιο είναι το αποτέλεσμα του 5 // 2 στην Python;",
+        "choices": [
+            "1. 2.5",
+            "2. 2",
+            "3. 1",
+            "4. 3"
+        ],
+        "answer": "2"
+    }
+]
