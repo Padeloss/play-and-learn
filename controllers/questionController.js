@@ -1,25 +1,43 @@
-const Question = require('../models/Question');
+const fs = require('fs');
+const path = require('path');
 
-const createQuestion = async (req, res) => {
-  try {
-    const question = new Question(req.body);
-    await question.save();
-    res.status(201).send(question);
-  } catch (error) {
-    res.status(400).send(error);
-  }
-};
+const lessonsPath = path.join(__dirname, '../lessons');
+const scoresFile = path.join(__dirname, '../scores.json');
 
 const getQuestions = async (req, res) => {
-  try {
-    const questions = await Question.find();
-    res.status(200).send(questions);
-  } catch (error) {
-    res.status(400).send(error);
-  }
+    try {
+        const { subject, difficulty } = req.params;
+        const filePath = path.join(lessonsPath, subject, `${difficulty}.json`);
+        
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).send({ error: 'File not found' });
+        }
+        
+        const data = fs.readFileSync(filePath);
+        const questions = JSON.parse(data);
+        res.status(200).send(questions);
+    } catch (error) {
+        res.status(500).send({ error: 'Server error' });
+    }
 };
 
-module.exports = {
-  createQuestion,
-  getQuestions,
+const updateScore = (req, res) => {
+    try {
+        const { player, score } = req.body;
+        let scores = {};
+        
+        if (fs.existsSync(scoresFile)) {
+            const data = fs.readFileSync(scoresFile);
+            scores = JSON.parse(data);
+        }
+        
+        scores[player] = (scores[player] || 0) + score;
+        fs.writeFileSync(scoresFile, JSON.stringify(scores, null, 2));
+        
+        res.status(200).send({ message: 'Score updated', scores });
+    } catch (error) {
+        res.status(500).send({ error: 'Server error' });
+    }
 };
+
+module.exports = { getQuestions, updateScore };
