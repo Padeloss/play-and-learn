@@ -1,9 +1,9 @@
 {
   "version": 2,
   "builds": [
-    { "src": "backend/index.js", "use": "@vercel/node" }
+    { "src": "package.json", "use": "@vercel/node" } // <--- Σημαντική αλλαγή
   ],
   "routes": [
-    { "src": "/.*", "dest": "/backend/index.js" }
+    { "src": "/(.*)", "dest": "/backend/index.js" }
   ]
 }
