@@ -8,6 +8,8 @@ const getQuestions = async (req, res) => {
     try {
         const { subject, difficulty } = req.params;
         const filePath = path.join(lessonsPath, subject, `${difficulty}.json`);
+        console.log("Trying to read file at:", filePath);
+
         
         if (!fs.existsSync(filePath)) {
             return res.status(404).send({ error: 'File not found' });
