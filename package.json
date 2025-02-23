@@ -5,7 +5,6 @@
   "main": "backend/index.js",
   "scripts": {
     "postinstall": "npm install",
-    "postinstall": "npm install express",
     "start": "cross-env NODE_OPTIONS=--openssl-legacy-provider react-scripts start",
     "build": "react-scripts build",
     "test": "cross-env NODE_OPTIONS=--openssl-legacy-provider react-scripts test",
