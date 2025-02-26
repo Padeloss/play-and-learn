@@ -5,6 +5,9 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Middleware για να διαβάζει JSON
+app.use(express.json());
+
 app.get('/lessons/:category/:lesson', (req, res) => {
   const category = req.params.category;
   const lesson = req.params.lesson;
@@ -24,14 +27,9 @@ app.get('/lessons/:category/:lesson', (req, res) => {
   });
 });
 
-
 // Προσθήκη route για το favicon.ico για να αποφύγουμε 500 error
 app.get('/favicon.ico', (req, res) => {
-    res.status(204).end(); // No Content
-});
-
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
+  res.status(204).end(); // No Content
 });
 
 module.exports = app;
