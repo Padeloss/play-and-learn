@@ -5,6 +5,8 @@
   "main": "backend/index.js",
   "scripts": {
     "start": "node server.js"
+    "build": "react-scripts build",
+    "dev": "react-scripts start"
   },
   "author": "Padeloss",
   "license": "MIT",
