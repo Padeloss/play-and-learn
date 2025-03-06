@@ -1,11 +1,14 @@
 import React from "react";
-import ReactDOM from "react-dom/client";
-import "./index.css";
-import App from "./components/App";
+import "./index.css"; // ✅ Βεβαιώσου ότι το αρχείο υπάρχει!
 
-const root = ReactDOM.createRoot(document.getElementById("root"));
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+function App() {
+  return (
+    <div className="App">
+      <header className="App-header">
+        <h1>Welcome to Play and Learn</h1>
+      </header>
+    </div>
+  );
+}
+
+export default App; // ✅ Πρέπει να υπάρχει αυτό!
