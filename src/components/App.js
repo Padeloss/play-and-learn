@@ -1,5 +1,5 @@
 import React from "react";
-import "./index.css"; // ✅ Βεβαιώσου ότι το αρχείο υπάρχει!
+import "../index.css"; // ✅ Βεβαιώσου ότι το αρχείο υπάρχει!
 
 function App() {
   return (
