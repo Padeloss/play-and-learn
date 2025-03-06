@@ -16,8 +16,8 @@ const lessonsPath = path.join(__dirname, 'lessons');
 // **📌 Endpoint για ανάγνωση ερωτήσεων από αρχείο JSON**
 app.get('/lessons/:category/:lesson', (req, res) => {
     try {
-        const category = decodeURIComponent(req.params.category);
-        const lesson = decodeURIComponent(req.params.lesson);
+        const category = decodeURIComponent(req.params.category).normalize('NFC');
+        const lesson = decodeURIComponent(req.params.lesson).normalize('NFC');
         const filePath = path.join(lessonsPath, category, `${lesson}.json`);
 
         console.log(`📂 Αναζήτηση αρχείου: ${filePath}`); // Debug log
