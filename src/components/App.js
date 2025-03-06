@@ -1,4 +1,5 @@
-import React from 'react';
+import React from "react";
+import "../index.css"; // ✅ Βεβαιώσου ότι το αρχείο υπάρχει!
 
 function App() {
   return (
@@ -10,4 +11,4 @@ function App() {
   );
 }
 
-export default App;
+export default App; // ✅ Πρέπει να υπάρχει αυτό!

@@ -1,19 +1,24 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const cors = require('cors'); // ✔️ Για να επιτρέπεται πρόσβαση από το frontend
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware για να διαβάζει JSON
+// Middleware
+app.use(cors()); // ✔️ Επιτρέπει τα CORS requests
 app.use(express.json());
 
-// Διαδρομή για ανάγνωση ερωτήσεων από αρχείο JSON
+// **✔️ Στατικός φάκελος για αρχεία JSON**
+const lessonsPath = path.join(__dirname, 'lessons');
+
+// **📌 Endpoint για ανάγνωση ερωτήσεων από αρχείο JSON**
 app.get('/lessons/:category/:lesson', (req, res) => {
     try {
-        const category = decodeURIComponent(req.params.category);
-        const lesson = decodeURIComponent(req.params.lesson);
-        const filePath = path.join(__dirname, 'lessons', category, `${lesson}.json`);
+        const category = decodeURIComponent(req.params.category).normalize('NFC');
+        const lesson = decodeURIComponent(req.params.lesson).normalize('NFC');
+        const filePath = path.join(lessonsPath, category, `${lesson}.json`);
 
         console.log(`📂 Αναζήτηση αρχείου: ${filePath}`); // Debug log
 
@@ -30,11 +35,10 @@ app.get('/lessons/:category/:lesson', (req, res) => {
     }
 });
 
-// Προσθήκη route για το favicon.ico για να αποφύγουμε 500 error
+// **📌 Route για favicon.ico (για αποφυγή 404 errors)**
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 
-// **✅ ΝΕΟ: Εκκίνηση server & Debug log**
+// **✔️ Εκκίνηση Server**
 app.listen(PORT, () => {
     console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
-
