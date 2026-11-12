@@ -4,6 +4,14 @@
 
 A Quizizz-like quiz app for students: pick a subject and a difficulty level and answer multiple-choice questions.
 
+## ✨ Τι κάνει
+
+- 9 μαθήματα × 3 δυσκολίες, περίπου 400 ερωτήσεις πολλαπλής επιλογής
+- ⏱️ 20 δευτερόλεπτα ανά ερώτηση, με πόντους: 100 για σωστή + έως 100 μπόνους ταχύτητας
+- 🔊 Ήχοι για σωστή/λάθος απάντηση (με κουμπί σίγασης)
+- 🏆 Πίνακας κατάταξης top 10 ανά μάθημα και δυσκολία (με όνομα παίκτη)
+- Ερωτήσεις και απαντήσεις ανακατεμένες σε κάθε παιχνίδι
+
 ## 📚 Μαθήματα
 
 | Μάθημα | Δυσκολίες |
@@ -25,7 +33,8 @@ A Quizizz-like quiz app for students: pick a subject and a difficulty level and 
 - **Frontend:** React, ως στατικό site (δεν χρειάζεται server)
 - **Ερωτήσεις:** αρχεία JSON· στο build αντιγράφονται αυτόματα στο site από το `frontend/scripts/copy-lessons.js`
 - **Hosting:** Vercel, με αυτόματο deploy σε κάθε push στο `main`
-- Το ρεκόρ κάθε παίκτη ανά μάθημα και δυσκολία κρατιέται στον browser του
+- **Κατάταξη:** serverless συνάρτηση `api/scores.js` στο Vercel, με αποθήκευση στο Vercel Blob
+- Το προσωπικό ρεκόρ κάθε παίκτη κρατιέται στον browser του
 
 ## 🚀 Εκκίνηση τοπικά
 

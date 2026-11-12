@@ -19,7 +19,17 @@ body {
 .top {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   margin-bottom: 16px;
+}
+
+.icon-btn {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 1.2rem;
+  padding: 6px 10px;
+  cursor: pointer;
 }
 
 .logo {
@@ -223,4 +233,159 @@ h1 {
   gap: 10px;
   justify-content: center;
   margin-top: 20px;
+}
+
+/* Όνομα παίκτη */
+.panel {
+  background: white;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+}
+
+.name-panel {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.name-panel label {
+  font-weight: 600;
+}
+
+.name-panel input {
+  font-size: 1rem;
+  padding: 12px;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  outline: none;
+}
+
+.name-panel input:focus {
+  border-color: #818cf8;
+}
+
+.rules {
+  margin-top: -10px;
+  font-size: 0.9rem;
+}
+
+.grow {
+  flex: 1;
+}
+
+.link {
+  background: none;
+  border: none;
+  font-size: 1.3rem;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+/* Χρονόμετρο */
+.timer {
+  position: relative;
+  height: 28px;
+  background: #e2e8f0;
+  border-radius: 99px;
+  overflow: hidden;
+  margin-bottom: 18px;
+}
+
+.timer-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: #22c55e;
+  transition: width 0.1s linear;
+}
+
+.timer.warn .timer-fill {
+  background: #f59e0b;
+}
+
+.timer.danger .timer-fill {
+  background: #ef4444;
+}
+
+.timer span {
+  position: relative;
+  display: block;
+  text-align: center;
+  line-height: 28px;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+/* Κατάταξη */
+.board-title {
+  font-size: 1.2rem;
+  margin: 24px 0 10px;
+}
+
+.board {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.board li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 6px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.board li:last-child {
+  border-bottom: none;
+}
+
+.board li.me {
+  background: #eef2ff;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+.board .pos {
+  width: 28px;
+  text-align: center;
+}
+
+.board .who {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board .pts small {
+  color: #64748b;
+  font-weight: 400;
+}
+
+.rank {
+  font-weight: 700;
+  color: #4f46e5;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.tab {
+  border: 1px solid #e2e8f0;
+  background: white;
+  border-radius: 99px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.tab.active {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: white;
 }
