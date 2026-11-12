@@ -1,9 +1,8 @@
 name: Deploy Backend to Vercel
 
+# Το Vercel κάνει ήδη αυτόματα deploy σε κάθε push (σύνδεση Vercel με GitHub).
+# Αυτό το workflow τρέχει μόνο χειροκίνητα, από την καρτέλα Actions.
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
