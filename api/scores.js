@@ -9,7 +9,7 @@
 // και χωρίς προβλήματα όταν δύο παίκτες τελειώνουν ταυτόχρονα.
 const { put, list } = require("@vercel/blob");
 
-const KEY_RE = /^\d{1,2}-(easy|medium|hard)$/;
+const KEY_RE = /^\d{1,3}-(easy|medium|hard|exam)$/;
 const MAX_POINTS_PER_QUESTION = 200;
 const TOP = 10;
 

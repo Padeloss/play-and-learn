@@ -5,27 +5,37 @@ const LEVELS = {
   easy: { label: "Εύκολο", emoji: "🟢" },
   medium: { label: "Μέτριο", emoji: "🟡" },
   hard: { label: "Δύσκολο", emoji: "🔴" },
+  exam: { label: "Διαγώνισμα", emoji: "📝" },
 };
 
 const ICONS = {
   "Άλγεβρα": "➗",
   "Αρχαία (κείμενα)": "🏛️",
+  "Αρχαία": "🏛️",
   "Βιολογία": "🧬",
   "Γεωγραφία": "🌍",
   "Γεωμετρία": "📐",
   "Ιστορία": "📜",
   "Νεοελληνικά": "📖",
+  "Νεοελληνική Γλώσσα": "📖",
+  "Γλώσσα": "✏️",
+  "Μαθηματικά": "🔢",
   "Φυσική": "⚛️",
+  "Φυσικά": "🔬",
+  "Χημεία": "⚗️",
   python: "🐍",
 };
 
 const SECONDS_PER_QUESTION = 20;
+const SECONDS_PER_EXAM_QUESTION = 30;
+const EXAM_QUESTIONS = 20;
 const BASE_POINTS = 100; // για σωστή απάντηση
 const SPEED_POINTS = 100; // επιπλέον, ανάλογα με το πόσο γρήγορα απάντησες
 
-const BEST_KEY = "playandlearn-best-points";
+const BEST_KEY = "playandlearn-best-v2";
 const NAME_KEY = "playandlearn-name";
 const SOUND_KEY = "playandlearn-sound";
+const TAB_KEY = "playandlearn-tab";
 
 // ---------- Βοηθητικά ----------
 
@@ -75,6 +85,17 @@ function subjectName(s) {
   return s.name === "python" ? "Python" : s.name;
 }
 
+function levelLabel(subject, level) {
+  if (level === "exam") return subject.examTitle || LEVELS.exam.label;
+  return LEVELS[level].label;
+}
+
+// Βαθμός στα 20, με ένα δεκαδικό (π.χ. 17,5)
+function gradeOf20(correct, total) {
+  const g = Math.round((correct / total) * 20 * 10) / 10;
+  return String(g).replace(".", ",");
+}
+
 const sounds = {
   correct: typeof Audio !== "undefined" ? new Audio("/sounds/correct.mp3") : null,
   wrong: typeof Audio !== "undefined" ? new Audio("/sounds/wrong.mp3") : null,
@@ -116,16 +137,22 @@ function Leaderboard({ scores, loading, error, highlight }) {
   );
 }
 
-async function fetchBoard(key) {
-  const r = await fetch(`/api/scores?key=${encodeURIComponent(key)}`);
+async function fetchJson(url) {
+  const r = await fetch(url);
   if (!r.ok) throw new Error();
-  return (await r.json()).scores || [];
+  return r.json();
+}
+
+async function fetchBoard(key) {
+  const data = await fetchJson(`/api/scores?key=${encodeURIComponent(key)}`);
+  return data.scores || [];
 }
 
 // ---------- Εφαρμογή ----------
 
 function App() {
-  const [subjects, setSubjects] = useState(null);
+  const [groups, setGroups] = useState(null);
+  const [tab, setTab] = useState(() => readStorage(TAB_KEY, 0));
   const [error, setError] = useState("");
   const [name, setName] = useState(() => readStorage(NAME_KEY, ""));
   const [soundOn, setSoundOn] = useState(() => readStorage(SOUND_KEY, true));
@@ -142,38 +169,55 @@ function App() {
   const [lastGain, setLastGain] = useState(0);
   const [timeLeft, setTimeLeft] = useState(SECONDS_PER_QUESTION);
   const [finished, setFinished] = useState(false);
+  const [history, setHistory] = useState([]); // για την επανάληψη των λαθών
 
   // κατάταξη
-  const [boardFor, setBoardFor] = useState(null); // { subject, level } όταν βλέπουμε μόνο κατάταξη
+  const [boardFor, setBoardFor] = useState(null);
   const [board, setBoard] = useState(null);
   const [boardLoading, setBoardLoading] = useState(false);
   const [boardError, setBoardError] = useState("");
   const [myRank, setMyRank] = useState(0);
 
   const questionStart = useRef(0);
+  const isExam = level === "exam";
+  const secondsPerQuestion = isExam ? SECONDS_PER_EXAM_QUESTION : SECONDS_PER_QUESTION;
 
   useEffect(() => {
-    fetch("/lessons/index.json")
-      .then((r) => {
-        if (!r.ok) throw new Error();
-        return r.json();
+    fetchJson("/lessons/index.json")
+      .then((data) => {
+        // κάθε μάθημα «ξέρει» αν η ομάδα του έχει διαγώνισμα
+        const withFlags = data.map((g) => ({
+          ...g,
+          subjects: g.subjects.map((s) => ({ ...s, exam: g.exam, examTitle: g.examTitle })),
+        }));
+        setGroups(withFlags);
       })
-      .then(setSubjects)
       .catch(() => setError("Δεν φορτώθηκαν τα μαθήματα. Δοκίμασε ξανά."));
   }, []);
 
   useEffect(() => writeStorage(NAME_KEY, name), [name]);
   useEffect(() => writeStorage(SOUND_KEY, soundOn), [soundOn]);
+  useEffect(() => writeStorage(TAB_KEY, tab), [tab]);
 
   const answer = useCallback(
     (index) => {
       if (picked !== null || !questions[current]) return;
       setPicked(index);
-      const isCorrect = index >= 0 && questions[current].choices[index].correct;
+      const q = questions[current];
+      const isCorrect = index >= 0 && q.choices[index].correct;
+      setHistory((h) => [
+        ...h,
+        {
+          question: q.question,
+          chosen: index >= 0 ? q.choices[index].text : null,
+          correct: q.choices.find((c) => c.correct).text,
+          ok: isCorrect,
+        },
+      ]);
       if (isCorrect) {
         const elapsed = (Date.now() - questionStart.current) / 1000;
-        const left = Math.max(0, SECONDS_PER_QUESTION - elapsed);
-        const gain = BASE_POINTS + Math.round((SPEED_POINTS * left) / SECONDS_PER_QUESTION);
+        const left = Math.max(0, secondsPerQuestion - elapsed);
+        const gain = BASE_POINTS + Math.round((SPEED_POINTS * left) / secondsPerQuestion);
         setCorrectCount((c) => c + 1);
         setPoints((p) => p + gain);
         setLastGain(gain);
@@ -183,7 +227,7 @@ function App() {
         playSound("wrong", soundOn);
       }
     },
-    [picked, questions, current, soundOn]
+    [picked, questions, current, soundOn, secondsPerQuestion]
   );
 
   // Χρονόμετρο ερώτησης
@@ -191,39 +235,48 @@ function App() {
     if (!subject || finished || picked !== null || questions.length === 0) return;
     const id = setInterval(() => {
       const elapsed = (Date.now() - questionStart.current) / 1000;
-      const left = Math.max(0, SECONDS_PER_QUESTION - elapsed);
+      const left = Math.max(0, secondsPerQuestion - elapsed);
       setTimeLeft(left);
       if (left <= 0) answer(-1);
     }, 100);
     return () => clearInterval(id);
-  }, [subject, finished, picked, questions, current, answer]);
+  }, [subject, finished, picked, questions, current, answer, secondsPerQuestion]);
 
-  function startQuestion() {
+  function startQuestion(seconds) {
     questionStart.current = Date.now();
-    setTimeLeft(SECONDS_PER_QUESTION);
+    setTimeLeft(seconds);
     setPicked(null);
     setLastGain(0);
   }
 
+  async function loadQuestions(subj, lvl) {
+    if (lvl !== "exam") {
+      return prepareQuestions(await fetchJson(`/lessons/${subj.id}/${lvl}.json`));
+    }
+    // Διαγώνισμα: ερωτήσεις από όλη την ύλη (όλες τις δυσκολίες)
+    const all = await Promise.all(
+      subj.levels.map(({ level: l }) => fetchJson(`/lessons/${subj.id}/${l}.json`))
+    );
+    return prepareQuestions(all.flat()).slice(0, EXAM_QUESTIONS);
+  }
+
   function startQuiz(subj, lvl) {
     setError("");
-    fetch(`/lessons/${subj.id}/${lvl}.json`)
-      .then((r) => {
-        if (!r.ok) throw new Error();
-        return r.json();
-      })
-      .then((data) => {
+    loadQuestions(subj, lvl)
+      .then((qs) => {
         setBoardFor(null);
         setSubject(subj);
         setLevel(lvl);
-        setQuestions(prepareQuestions(data));
+        setQuestions(qs);
         setCurrent(0);
         setCorrectCount(0);
         setPoints(0);
+        setHistory([]);
         setFinished(false);
         setBoard(null);
         setMyRank(0);
-        startQuestion();
+        startQuestion(lvl === "exam" ? SECONDS_PER_EXAM_QUESTION : SECONDS_PER_QUESTION);
+        window.scrollTo(0, 0);
       })
       .catch(() => setError("Δεν φορτώθηκαν οι ερωτήσεις. Δοκίμασε ξανά."));
   }
@@ -231,7 +284,7 @@ function App() {
   function next() {
     if (current + 1 < questions.length) {
       setCurrent(current + 1);
-      startQuestion();
+      startQuestion(secondsPerQuestion);
       return;
     }
     finishQuiz();
@@ -245,6 +298,7 @@ function App() {
       writeStorage(BEST_KEY, updated);
     }
     setFinished(true);
+    window.scrollTo(0, 0);
 
     setBoardLoading(true);
     setBoardError("");
@@ -312,7 +366,7 @@ function App() {
     </header>
   );
 
-  if (error && !subjects) {
+  if (error && !groups) {
     return (
       <div className="page">
         {header}
@@ -321,7 +375,7 @@ function App() {
     );
   }
 
-  if (!subjects) {
+  if (!groups) {
     return (
       <div className="page">
         {header}
@@ -333,20 +387,22 @@ function App() {
   // Μόνο κατάταξη
   if (boardFor) {
     const { subject: s, level: lv } = boardFor;
+    const tabs = [...s.levels.map(({ level: l }) => l), ...(s.exam ? ["exam"] : [])];
     return (
       <div className="page">
         {header}
         <h1>
           🏆 {ICONS[s.name] || "📘"} {subjectName(s)}
         </h1>
+        <p className="muted grade-line">Για: {s.grade}</p>
         <div className="tabs">
-          {s.levels.map(({ level: l }) => (
+          {tabs.map((l) => (
             <button
               key={l}
               className={`tab ${l === lv ? "active" : ""}`}
               onClick={() => openBoard(s, l)}
             >
-              {LEVELS[l].emoji} {LEVELS[l].label}
+              {LEVELS[l].emoji} {levelLabel(s, l)}
             </button>
           ))}
         </div>
@@ -355,7 +411,7 @@ function App() {
         </div>
         <div className="actions">
           <button className="primary" onClick={() => startQuiz(s, lv)}>
-            Παίξε {LEVELS[lv].label}
+            Παίξε: {levelLabel(s, lv)}
           </button>
           <button className="secondary" onClick={goHome}>
             Πίσω
@@ -367,6 +423,8 @@ function App() {
 
   // Αρχική
   if (!subject) {
+    const activeTab = Math.min(Math.max(0, Number(tab) || 0), groups.length - 1);
+    const group = groups[activeTab];
     return (
       <div className="page">
         {header}
@@ -385,18 +443,41 @@ function App() {
           </small>
         </div>
 
-        <h1>Διάλεξε μάθημα και δυσκολία</h1>
+        <h1>Διάλεξε τάξη</h1>
+        <div className="tabs grade-tabs">
+          {groups.map((g, i) => (
+            <button
+              key={g.title}
+              className={`tab ${i === activeTab ? "active" : ""}`}
+              onClick={() => setTab(i)}
+            >
+              {g.icon} {g.title}
+            </button>
+          ))}
+        </div>
+
         <p className="muted rules">
-          ⏱️ {SECONDS_PER_QUESTION} δευτερόλεπτα ανά ερώτηση · ✅ {BASE_POINTS} πόντοι για
-          σωστή + έως {SPEED_POINTS} μπόνους ταχύτητας
+          ⏱️ {SECONDS_PER_QUESTION}″ ανά ερώτηση · ✅ {BASE_POINTS} πόντοι για σωστή + έως{" "}
+          {SPEED_POINTS} μπόνους ταχύτητας
         </p>
+        {group.exam && (
+          <div className="exam-note">
+            📝 <b>{group.examTitle}:</b> {EXAM_QUESTIONS} ερωτήσεις από όλη την ύλη του
+            μαθήματος, {SECONDS_PER_EXAM_QUESTION}″ η καθεμία, με βαθμό στα 20 και λίστα με τα
+            λάθη για επανάληψη.
+          </div>
+        )}
         {error && <p className="error">{error}</p>}
+
         <div className="grid">
-          {subjects.map((s) => (
+          {group.subjects.map((s) => (
             <div className="card" key={s.id}>
               <div className="card-title">
                 <span className="icon">{ICONS[s.name] || "📘"}</span>
-                <span className="grow">{subjectName(s)}</span>
+                <span className="grow">
+                  {subjectName(s)}
+                  <span className="grade-chip">{s.grade}</span>
+                </span>
                 <button
                   className="link"
                   onClick={() => openBoard(s, s.levels[0].level)}
@@ -423,6 +504,17 @@ function App() {
                     </button>
                   );
                 })}
+                {s.exam && (
+                  <button className="level exam" onClick={() => startQuiz(s, "exam")}>
+                    <span>📝 {s.examTitle}</span>
+                    <small>
+                      {EXAM_QUESTIONS} ερωτ.
+                      {best[`${s.id}-exam`] !== undefined
+                        ? ` · ρεκόρ ${best[`${s.id}-exam`]} π.`
+                        : ""}
+                    </small>
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -441,16 +533,30 @@ function App() {
         ? "Μπράβο! 🎉"
         : percent >= 50
         ? "Καλή προσπάθεια! 👍"
-        : "Συνέχισε την εξάσκηση! 💪";
+        : "Συνέχισε την επανάληψη! 💪";
+    const mistakes = history.filter((h) => !h.ok);
     return (
       <div className="page">
         {header}
         <div className="result">
           <h1>{message}</h1>
-          <div className="big">{points} πόντοι</div>
+          {isExam ? (
+            <>
+              <div className="big">Βαθμός {gradeOf20(correctCount, questions.length)}/20</div>
+              <p className="muted">
+                {correctCount}/{questions.length} σωστές · {points} πόντοι
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="big">{points} πόντοι</div>
+              <p className="muted">
+                {correctCount}/{questions.length} σωστές ({percent}%)
+              </p>
+            </>
+          )}
           <p className="muted">
-            {correctCount}/{questions.length} σωστές ({percent}%) · {subjectName(subject)} ·{" "}
-            {LEVELS[level].label}
+            {subjectName(subject)} · {levelLabel(subject, level)} · {subject.grade}
           </p>
           {myRank > 0 && <p className="rank">Είσαι στη θέση #{myRank} της κατάταξης! 🎉</p>}
           {!name.trim() && (
@@ -465,6 +571,26 @@ function App() {
             </button>
           </div>
         </div>
+
+        <h2 className="board-title">
+          {mistakes.length === 0
+            ? "✅ Καμία λάθος απάντηση!"
+            : `📒 Επανάληψη: τα λάθη σου (${mistakes.length})`}
+        </h2>
+        {mistakes.length > 0 && (
+          <div className="panel review">
+            {mistakes.map((m, i) => (
+              <div className="review-item" key={i}>
+                <div className="review-q">{m.question}</div>
+                <div className="review-wrong">
+                  ❌ {m.chosen === null ? "Δεν απάντησες (τέλος χρόνου)" : m.chosen}
+                </div>
+                <div className="review-right">✅ {m.correct}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
         <h2 className="board-title">🏆 Κατάταξη — top 10</h2>
         <div className="panel">
           <Leaderboard
@@ -481,7 +607,7 @@ function App() {
   // Ερώτηση
   const q = questions[current];
   const progress = ((current + (picked !== null ? 1 : 0)) / questions.length) * 100;
-  const timePercent = (timeLeft / SECONDS_PER_QUESTION) * 100;
+  const timePercent = (timeLeft / secondsPerQuestion) * 100;
   const timeClass = timeLeft <= 5 ? "danger" : timeLeft <= 10 ? "warn" : "";
 
   return (
@@ -489,7 +615,7 @@ function App() {
       {header}
       <div className="quiz-info">
         <span>
-          {ICONS[subject.name] || "📘"} {subjectName(subject)} · {LEVELS[level].label}
+          {ICONS[subject.name] || "📘"} {subjectName(subject)} · {levelLabel(subject, level)}
         </span>
         <span>
           {current + 1}/{questions.length} · <b>{points} π.</b>
