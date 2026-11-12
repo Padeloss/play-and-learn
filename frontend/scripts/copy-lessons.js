@@ -2,7 +2,7 @@
 // ώστε η εφαρμογή να δουλεύει ως απλό στατικό site (χωρίς server).
 //
 // Δομή του backend/lessons:
-//   grades.json                          -> οι τάξεις και η σειρά των μαθημάτων
+//   grades.json                          -> οι τάξεις, η σειρά των μαθημάτων και το θέμα ήχων ("sound": "kids" | "metal")
 //   <Τάξη>/<Μάθημα>/meta.json            -> { "grade": "...", "chapters": [ { "id": "01", "title": "..." } ] }
 //   <Τάξη>/<Μάθημα>/chapters/<id>.json   -> ερωτήσεις ενός κεφαλαίου (αν το μάθημα έχει κεφάλαια)
 //   <Τάξη>/<Μάθημα>/easy.json, medium.json, hard.json
@@ -141,6 +141,7 @@ const index = grades.map((g) => {
     icon: g.icon || "📘",
     exam: Boolean(g.exam),
     examTitle: g.examTitle || "Διαγώνισμα",
+    sound: g.sound === "metal" ? "metal" : "kids", // θέμα ήχων: kids (Δημοτικό) ή metal (Γυμνάσιο)
     subjects: list,
   };
 });

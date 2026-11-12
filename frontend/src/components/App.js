@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import "../index.css";
+import { playSound } from "../sounds";
 
 // Τρόποι παιχνιδιού ("mode"):
 //   easy | medium | hard  -> ερωτήσεις μιας δυσκολίας (μαθήματα χωρίς κεφάλαια)
@@ -127,23 +128,6 @@ function gradeOf20(correct, total) {
   return String(g).replace(".", ",");
 }
 
-const sounds = {
-  correct: typeof Audio !== "undefined" ? new Audio("/sounds/correct.mp3") : null,
-  wrong: typeof Audio !== "undefined" ? new Audio("/sounds/wrong.mp3") : null,
-};
-
-function playSound(name, enabled) {
-  const s = sounds[name];
-  if (!enabled || !s) return;
-  try {
-    s.currentTime = 0;
-    const p = s.play();
-    if (p && p.catch) p.catch(() => {});
-  } catch {
-    /* ο browser δεν άφησε να παίξει ήχος */
-  }
-}
-
 async function fetchJson(url) {
   const r = await fetch(url);
   if (!r.ok) throw new Error();
@@ -227,6 +211,7 @@ function App() {
             ...s,
             examTitle: g.examTitle,
             reviewMode: g.exam ? "exam" : "all",
+            sound: g.sound || "kids",
           })),
         }));
         setGroups(withFlags);
@@ -314,13 +299,13 @@ function App() {
         setCorrectCount((c) => c + 1);
         setPoints((p) => p + gain);
         setLastGain(gain);
-        playSound("correct", soundOn);
+        playSound("correct", subject && subject.sound, soundOn);
       } else {
         setLastGain(0);
-        playSound("wrong", soundOn);
+        playSound("wrong", subject && subject.sound, soundOn);
       }
     },
-    [picked, questions, current, soundOn, secondsPerQuestion]
+    [picked, questions, current, soundOn, secondsPerQuestion, subject]
   );
 
   // Χρονόμετρο ερώτησης
@@ -398,6 +383,7 @@ function App() {
       writeStorage(BEST_KEY, updated);
     }
     setFinished(true);
+    playSound("finish", subject.sound, soundOn);
     window.scrollTo(0, 0);
 
     setBoardLoading(true);
