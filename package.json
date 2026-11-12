@@ -3,12 +3,16 @@
   "version": "1.0.0",
   "description": "Play and Learn - Fullstack App",
   "scripts": {
-    "install": "npm install --workspaces",
     "start": "cd backend && node index.js",
     "build": "npm run build --workspace=frontend"
   },
   "author": "Padeloss",
   "license": "MIT",
-  "workspaces": ["frontend", "backend"]
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "engines": {
+    "node": "22.x"
+  }
 }
-
