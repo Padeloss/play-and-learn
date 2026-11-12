@@ -13,14 +13,24 @@ const { put, list } = require("@vercel/blob");
 
 const KEY_RE = /^[a-f0-9]{8}-(easy|medium|hard|exam|all|c[0-9a-z]{1,6})$/;
 const MAX_POINTS_PER_QUESTION = 200;
+const TOP = 10;
 
-// Παλιά σκορ (πριν από τις 12/11/2026) αποθηκεύτηκαν με κλειδί <αριθμός μαθήματος>-<δυσκολία>,
-// π.χ. "15-easy". Εδώ λέμε ποιο παλιό νούμερο αντιστοιχεί σε κάθε νέο σταθερό κλειδί, ώστε η
-// κατάταξη να δείχνει μαζί παλιά και νέα σκορ. Ισχύει για easy/medium/hard/exam.
-const LEGACY_IDS = {
+// ---------- Παλιά σκορ ----------
+// Πριν από τα σταθερά κλειδιά, τα σκορ αποθηκεύονταν ως <αριθμός μαθήματος>-<δυσκολία>
+// (π.χ. "15-easy"). Η αρίθμηση άλλαξε μία φορά, άρα το ίδιο νούμερο σημαίνει άλλο μάθημα
+// ανάλογα με το ΠΟΤΕ μπήκε το σκορ. Τα όρια είναι οι ώρες που ανέβηκε κάθε έκδοση στο Vercel.
+//
+//   Εποχή 1: μέχρι 12/11/2026 19:01:05 — μόνο τα 9 «γενικά» μαθήματα (0–8), που δεν υπάρχουν πια
+//   Εποχή 2: 19:01:05 – 19:59:15 — μαθήματα ανά τάξη (0–16 όπως παρακάτω, 17–25 τα «γενικά»)
+//   Από 19:59:15: σταθερά κλειδιά (scores/<κλειδί>-<τρόπος>/)
+const ERA2_START = 1794502865253;
+const ERA2_END = 1794506424884;
+
+// Νέο σταθερό κλειδί -> αριθμός του ίδιου μαθήματος στην εποχή 2
+const ERA2_IDS = {
   "58e4d866": "0", // Ε΄ Δημοτικού — Μαθηματικά
   "0fc78b2c": "1", // Ε΄ Δημοτικού — Γλώσσα
-  e535dba8: "2", // Ε΄ Δημοτικού — Ιστορία (τα παλιά σκορ δυσκολίας δεν έχουν πια κουίζ)
+  e535dba8: "2", // Ε΄ Δημοτικού — Ιστορία
   f17584f7: "3", // Ε΄ Δημοτικού — Γεωγραφία
   edeedd41: "4", // Ε΄ Δημοτικού — Φυσικά
   "3d9410d4": "5", // ΣΤ΄ Δημοτικού — Μαθηματικά
@@ -37,16 +47,19 @@ const LEGACY_IDS = {
   "766e4934": "16", // Γ΄ Γυμνασίου — Βιολογία
 };
 
-// Όλοι οι φάκελοι όπου μπορεί να υπάρχουν σκορ για ένα κλειδί (νέος + παλιός)
-function prefixesFor(key) {
+// Πού να ψάξει σκορ για ένα κλειδί: { prefix, from, to } (from/to = όρια χρόνου του σκορ)
+function sourcesFor(key) {
   const [base, mode] = key.split("-");
-  const list = [`scores/${key}/`];
-  if (LEGACY_IDS[base] && /^(easy|medium|hard|exam)$/.test(mode)) {
-    list.push(`scores/${LEGACY_IDS[base]}-${mode}/`);
+  const list = [{ prefix: `scores/${key}/`, from: 0, to: Infinity }];
+  if (ERA2_IDS[base] && /^(easy|medium|hard|exam)$/.test(mode)) {
+    list.push({
+      prefix: `scores/${ERA2_IDS[base]}-${mode}/`,
+      from: ERA2_START,
+      to: ERA2_END,
+    });
   }
   return list;
 }
-const TOP = 10;
 
 function toHex(text) {
   return Buffer.from(text, "utf8").toString("hex");
@@ -70,7 +83,7 @@ function cleanName(raw) {
 
 async function readTop(key) {
   const entries = [];
-  for (const prefix of prefixesFor(key)) {
+  for (const { prefix, from, to } of sourcesFor(key)) {
     let cursor;
     do {
       const page = await list({ prefix, cursor, limit: 1000 });
@@ -81,6 +94,7 @@ async function readTop(key) {
           .pop()
           .replace(/\.txt$/, "");
         const [points, correct, total, time, name] = file.split("_");
+        if (!(Number(time) >= from && Number(time) < to)) continue; // σκορ άλλης εποχής
         entries.push({
           points: Number(points),
           correct: Number(correct),
