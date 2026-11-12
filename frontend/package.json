@@ -4,7 +4,10 @@
   "description": "Frontend for Play and Learn",
   "main": "src/index.js",
   "scripts": {
+    "copy-lessons": "node scripts/copy-lessons.js",
+    "prestart": "node scripts/copy-lessons.js",
     "start": "react-scripts start",
+    "prebuild": "node scripts/copy-lessons.js",
     "build": "react-scripts build"
   },
   "dependencies": {

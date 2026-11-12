@@ -22,9 +22,10 @@ A Quizizz-like quiz app for students: pick a subject and a difficulty level and 
 
 ## 🛠️ Τεχνολογίες
 
-- **Frontend:** React
-- **Backend:** Node.js + Express
-- **Hosting:** Vercel, με αυτόματο deploy μέσω GitHub Actions σε κάθε push στο `main`
+- **Frontend:** React, ως στατικό site (δεν χρειάζεται server)
+- **Ερωτήσεις:** αρχεία JSON· στο build αντιγράφονται αυτόματα στο site από το `frontend/scripts/copy-lessons.js`
+- **Hosting:** Vercel, με αυτόματο deploy σε κάθε push στο `main`
+- Το ρεκόρ κάθε παίκτη ανά μάθημα και δυσκολία κρατιέται στον browser του
 
 ## 🚀 Εκκίνηση τοπικά
 
@@ -32,10 +33,10 @@ A Quizizz-like quiz app for students: pick a subject and a difficulty level and 
 git clone https://github.com/Padeloss/play-and-learn.git
 cd play-and-learn
 npm install
-npm start
+npm run build
 ```
 
-Η εφαρμογή ανοίγει στο `http://localhost:3000`.
+Για το παιχνίδι σε λειτουργία ανάπτυξης: `npm start --workspace=frontend` (ανοίγει στο `http://localhost:3000`).
 
 ## ➕ Προσθήκη ερωτήσεων
 
