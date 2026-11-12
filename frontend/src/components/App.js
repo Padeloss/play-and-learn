@@ -1,38 +1,37 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import "../index.css";
 
+// Τρόποι παιχνιδιού ("mode"):
+//   easy | medium | hard  -> ερωτήσεις μιας δυσκολίας (μαθήματα χωρίς κεφάλαια)
+//   c<id>                 -> ένα κεφάλαιο, π.χ. c07 ή c30a
+//   all                   -> Επανάληψη όλης της ύλης (τυχαίες ερωτήσεις από όλο το μάθημα)
+//   exam                  -> Διαγώνισμα (όπως το all, με περισσότερο χρόνο και βαθμό στα 20)
 const LEVELS = {
   easy: { label: "Εύκολο", emoji: "🟢" },
   medium: { label: "Μέτριο", emoji: "🟡" },
   hard: { label: "Δύσκολο", emoji: "🔴" },
-  exam: { label: "Διαγώνισμα", emoji: "📝" },
 };
 
 const ICONS = {
-  "Άλγεβρα": "➗",
-  "Αρχαία (κείμενα)": "🏛️",
   "Αρχαία": "🏛️",
   "Βιολογία": "🧬",
   "Γεωγραφία": "🌍",
-  "Γεωμετρία": "📐",
   "Ιστορία": "📜",
-  "Νεοελληνικά": "📖",
   "Νεοελληνική Γλώσσα": "📖",
   "Γλώσσα": "✏️",
   "Μαθηματικά": "🔢",
   "Φυσική": "⚛️",
   "Φυσικά": "🔬",
   "Χημεία": "⚗️",
-  python: "🐍",
 };
 
 const SECONDS_PER_QUESTION = 20;
 const SECONDS_PER_EXAM_QUESTION = 30;
-const EXAM_QUESTIONS = 20;
+const REVIEW_QUESTIONS = 20; // για «Επανάληψη όλης της ύλης» και «Διαγώνισμα»
 const BASE_POINTS = 100; // για σωστή απάντηση
 const SPEED_POINTS = 100; // επιπλέον, ανάλογα με το πόσο γρήγορα απάντησες
 
-const BEST_KEY = "playandlearn-best-v2";
+const BEST_KEY = "playandlearn-best-v3";
 const NAME_KEY = "playandlearn-name";
 const SOUND_KEY = "playandlearn-sound";
 const TAB_KEY = "playandlearn-tab";
@@ -81,13 +80,45 @@ function writeStorage(key, value) {
   }
 }
 
-function subjectName(s) {
-  return s.name === "python" ? "Python" : s.name;
+function icon(subject) {
+  return ICONS[subject.name] || "📘";
 }
 
-function levelLabel(subject, level) {
-  if (level === "exam") return subject.examTitle || LEVELS.exam.label;
-  return LEVELS[level].label;
+function isReview(mode) {
+  return mode === "all" || mode === "exam";
+}
+
+function chapterOf(subject, mode) {
+  if (!mode || mode[0] !== "c") return null;
+  return subject.chapters.find((c) => `c${c.id}` === mode) || null;
+}
+
+function modeLabel(subject, mode) {
+  if (mode === "exam") return subject.examTitle;
+  if (mode === "all") return "Επανάληψη όλης της ύλης";
+  if (LEVELS[mode]) return LEVELS[mode].label;
+  const ch = chapterOf(subject, mode);
+  return ch ? `Κεφ. ${ch.num}: ${ch.title}` : mode;
+}
+
+function modeEmoji(mode) {
+  if (mode === "exam") return "📝";
+  if (mode === "all") return "📚";
+  if (LEVELS[mode]) return LEVELS[mode].emoji;
+  return "📖";
+}
+
+// Όλοι οι τρόποι παιχνιδιού ενός μαθήματος, με τη σειρά που εμφανίζονται
+function modesOf(subject) {
+  return [
+    subject.reviewMode,
+    ...subject.chapters.map((c) => `c${c.id}`),
+    ...subject.levels.map((l) => l.level),
+  ];
+}
+
+function boardKey(subject, mode) {
+  return `${subject.key}-${mode}`;
 }
 
 // Βαθμός στα 20, με ένα δεκαδικό (π.χ. 17,5)
@@ -111,6 +142,17 @@ function playSound(name, enabled) {
   } catch {
     /* ο browser δεν άφησε να παίξει ήχος */
   }
+}
+
+async function fetchJson(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error();
+  return r.json();
+}
+
+async function fetchBoard(key) {
+  const data = await fetchJson(`/api/scores?key=${encodeURIComponent(key)}`);
+  return data.scores || [];
 }
 
 // ---------- Πίνακας κατάταξης ----------
@@ -137,17 +179,6 @@ function Leaderboard({ scores, loading, error, highlight }) {
   );
 }
 
-async function fetchJson(url) {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error();
-  return r.json();
-}
-
-async function fetchBoard(key) {
-  const data = await fetchJson(`/api/scores?key=${encodeURIComponent(key)}`);
-  return data.scores || [];
-}
-
 // ---------- Εφαρμογή ----------
 
 function App() {
@@ -158,9 +189,12 @@ function App() {
   const [soundOn, setSoundOn] = useState(() => readStorage(SOUND_KEY, true));
   const [best, setBest] = useState(() => readStorage(BEST_KEY, {}));
 
+  // ποιο μάθημα είναι ανοιχτό (οθόνη μαθήματος)
+  const [openSubject, setOpenSubject] = useState(null);
+
   // κουίζ
   const [subject, setSubject] = useState(null);
-  const [level, setLevel] = useState(null);
+  const [mode, setMode] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [current, setCurrent] = useState(0);
   const [picked, setPicked] = useState(null); // index, ή -1 αν τελείωσε ο χρόνος
@@ -170,6 +204,7 @@ function App() {
   const [timeLeft, setTimeLeft] = useState(SECONDS_PER_QUESTION);
   const [finished, setFinished] = useState(false);
   const [history, setHistory] = useState([]); // για την επανάληψη των λαθών
+  const [loading, setLoading] = useState(false);
 
   // κατάταξη
   const [boardFor, setBoardFor] = useState(null);
@@ -179,16 +214,20 @@ function App() {
   const [myRank, setMyRank] = useState(0);
 
   const questionStart = useRef(0);
-  const isExam = level === "exam";
+  const isExam = mode === "exam";
   const secondsPerQuestion = isExam ? SECONDS_PER_EXAM_QUESTION : SECONDS_PER_QUESTION;
 
   useEffect(() => {
     fetchJson("/lessons/index.json")
       .then((data) => {
-        // κάθε μάθημα «ξέρει» αν η ομάδα του έχει διαγώνισμα
+        // κάθε μάθημα «ξέρει» αν η τάξη του έχει διαγώνισμα ή απλή επανάληψη
         const withFlags = data.map((g) => ({
           ...g,
-          subjects: g.subjects.map((s) => ({ ...s, exam: g.exam, examTitle: g.examTitle })),
+          subjects: g.subjects.map((s) => ({
+            ...s,
+            examTitle: g.examTitle,
+            reviewMode: g.exam ? "exam" : "all",
+          })),
         }));
         setGroups(withFlags);
       })
@@ -198,6 +237,60 @@ function App() {
   useEffect(() => writeStorage(NAME_KEY, name), [name]);
   useEffect(() => writeStorage(SOUND_KEY, soundOn), [soundOn]);
   useEffect(() => writeStorage(TAB_KEY, tab), [tab]);
+
+  // ---------- Πλοήγηση (και με το κουμπί «πίσω» του κινητού) ----------
+
+  const depth = subject || boardFor ? 2 : openSubject ? 1 : 0;
+  const depthRef = useRef(0);
+  depthRef.current = depth;
+
+  function pushLevel() {
+    try {
+      window.history.pushState({ pal: true }, "");
+    } catch {
+      /* δεν πειράζει */
+    }
+  }
+
+  const closeInner = useCallback(() => {
+    setSubject(null);
+    setMode(null);
+    setQuestions([]);
+    setFinished(false);
+    setBoardFor(null);
+  }, []);
+
+  useEffect(() => {
+    function onPop() {
+      if (depthRef.current === 2) closeInner();
+      else if (depthRef.current === 1) setOpenSubject(null);
+      window.scrollTo(0, 0);
+    }
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [closeInner]);
+
+  // Πίσω ένα επίπεδο (μέσα από την εφαρμογή)
+  function back() {
+    if (depth > 0) window.history.back();
+  }
+
+  // Κατευθείαν στην αρχική
+  function goHome() {
+    const steps = depthRef.current;
+    closeInner();
+    setOpenSubject(null);
+    if (steps > 0) window.history.go(-steps);
+    window.scrollTo(0, 0);
+  }
+
+  function openSubjectPage(s) {
+    setOpenSubject(s);
+    pushLevel();
+    window.scrollTo(0, 0);
+  }
+
+  // ---------- Κουίζ ----------
 
   const answer = useCallback(
     (index) => {
@@ -249,24 +342,30 @@ function App() {
     setLastGain(0);
   }
 
-  async function loadQuestions(subj, lvl) {
-    if (lvl !== "exam") {
-      return prepareQuestions(await fetchJson(`/lessons/${subj.id}/${lvl}.json`));
-    }
-    // Διαγώνισμα: ερωτήσεις από όλη την ύλη (όλες τις δυσκολίες)
-    const all = await Promise.all(
-      subj.levels.map(({ level: l }) => fetchJson(`/lessons/${subj.id}/${l}.json`))
-    );
-    return prepareQuestions(all.flat()).slice(0, EXAM_QUESTIONS);
+  async function loadQuestions(subj, m) {
+    if (LEVELS[m]) return prepareQuestions(await fetchJson(`/lessons/${subj.id}/${m}.json`));
+    const ch = chapterOf(subj, m);
+    if (ch) return prepareQuestions(await fetchJson(`/lessons/${subj.id}/chapters/${ch.id}.json`));
+    // Επανάληψη / Διαγώνισμα: ερωτήσεις από όλη την ύλη
+    const files = [
+      ...subj.chapters.map((c) => `/lessons/${subj.id}/chapters/${c.id}.json`),
+      ...subj.levels.map(({ level: l }) => `/lessons/${subj.id}/${l}.json`),
+    ];
+    const all = await Promise.all(files.map(fetchJson));
+    return prepareQuestions(all.flat()).slice(0, REVIEW_QUESTIONS);
   }
 
-  function startQuiz(subj, lvl) {
+  function startQuiz(subj, m) {
+    if (loading) return;
     setError("");
-    loadQuestions(subj, lvl)
+    setLoading(true);
+    const alreadyInside = Boolean(subject || boardFor);
+    loadQuestions(subj, m)
       .then((qs) => {
+        if (!alreadyInside) pushLevel();
         setBoardFor(null);
         setSubject(subj);
-        setLevel(lvl);
+        setMode(m);
         setQuestions(qs);
         setCurrent(0);
         setCorrectCount(0);
@@ -275,10 +374,11 @@ function App() {
         setFinished(false);
         setBoard(null);
         setMyRank(0);
-        startQuestion(lvl === "exam" ? SECONDS_PER_EXAM_QUESTION : SECONDS_PER_QUESTION);
+        startQuestion(m === "exam" ? SECONDS_PER_EXAM_QUESTION : SECONDS_PER_QUESTION);
         window.scrollTo(0, 0);
       })
-      .catch(() => setError("Δεν φορτώθηκαν οι ερωτήσεις. Δοκίμασε ξανά."));
+      .catch(() => setError("Δεν φορτώθηκαν οι ερωτήσεις. Δοκίμασε ξανά."))
+      .finally(() => setLoading(false));
   }
 
   function next() {
@@ -291,8 +391,8 @@ function App() {
   }
 
   function finishQuiz() {
-    const key = `${subject.id}-${level}`;
-    if (!best[key] || points > best[key]) {
+    const key = boardKey(subject, mode);
+    if (best[key] === undefined || points > best[key]) {
       const updated = { ...best, [key]: points };
       setBest(updated);
       writeStorage(BEST_KEY, updated);
@@ -328,24 +428,22 @@ function App() {
       .finally(() => setBoardLoading(false));
   }
 
-  function openBoard(subj, lvl) {
-    setBoardFor({ subject: subj, level: lvl });
+  function openBoard(subj, m) {
+    if (!boardFor && !subject) pushLevel();
+    setBoardFor({ subject: subj, mode: m });
     setBoard(null);
     setMyRank(0);
     setBoardLoading(true);
     setBoardError("");
-    fetchBoard(`${subj.id}-${lvl}`)
+    fetchBoard(boardKey(subj, m))
       .then(setBoard)
       .catch(() => setBoardError("Η κατάταξη δεν είναι διαθέσιμη αυτή τη στιγμή."))
       .finally(() => setBoardLoading(false));
   }
 
-  function goHome() {
-    setSubject(null);
-    setLevel(null);
-    setQuestions([]);
-    setFinished(false);
-    setBoardFor(null);
+  function bestText(subj, m) {
+    const b = best[boardKey(subj, m)];
+    return b !== undefined ? ` · ρεκόρ ${b} π.` : "";
   }
 
   // ---------- Οθόνες ----------
@@ -384,36 +482,39 @@ function App() {
     );
   }
 
-  // Μόνο κατάταξη
+  // Κατάταξη
   if (boardFor) {
-    const { subject: s, level: lv } = boardFor;
-    const tabs = [...s.levels.map(({ level: l }) => l), ...(s.exam ? ["exam"] : [])];
+    const { subject: s, mode: m } = boardFor;
     return (
       <div className="page">
         {header}
         <h1>
-          🏆 {ICONS[s.name] || "📘"} {subjectName(s)}
+          🏆 {icon(s)} {s.name}
         </h1>
-        <p className="muted grade-line">Για: {s.grade}</p>
-        <div className="tabs">
-          {tabs.map((l) => (
-            <button
-              key={l}
-              className={`tab ${l === lv ? "active" : ""}`}
-              onClick={() => openBoard(s, l)}
-            >
-              {LEVELS[l].emoji} {levelLabel(s, l)}
-            </button>
+        <p className="muted grade-line">{s.grade}</p>
+        <label className="select-label" htmlFor="board-mode">
+          Κατάταξη για:
+        </label>
+        <select
+          id="board-mode"
+          className="select"
+          value={m}
+          onChange={(e) => openBoard(s, e.target.value)}
+        >
+          {modesOf(s).map((x) => (
+            <option key={x} value={x}>
+              {modeEmoji(x)} {modeLabel(s, x)}
+            </option>
           ))}
-        </div>
+        </select>
         <div className="panel">
           <Leaderboard scores={board} loading={boardLoading} error={boardError} />
         </div>
         <div className="actions">
-          <button className="primary" onClick={() => startQuiz(s, lv)}>
-            Παίξε: {levelLabel(s, lv)}
+          <button className="primary" onClick={() => startQuiz(s, m)} disabled={loading}>
+            Παίξε αυτό
           </button>
-          <button className="secondary" onClick={goHome}>
+          <button className="secondary" onClick={back}>
             Πίσω
           </button>
         </div>
@@ -421,110 +522,8 @@ function App() {
     );
   }
 
-  // Αρχική
-  if (!subject) {
-    const activeTab = Math.min(Math.max(0, Number(tab) || 0), groups.length - 1);
-    const group = groups[activeTab];
-    return (
-      <div className="page">
-        {header}
-        <div className="panel name-panel">
-          <label htmlFor="player">Το όνομά σου (για την κατάταξη)</label>
-          <input
-            id="player"
-            value={name}
-            maxLength={20}
-            placeholder="π.χ. Νίκος Π."
-            onChange={(e) => setName(e.target.value)}
-          />
-          <small className="muted">
-            Αν το αφήσεις κενό, παίζεις κανονικά αλλά δεν μπαίνεις στην κατάταξη. Μη γράφεις
-            επώνυμο ολόκληρο — φαίνεται σε όλους.
-          </small>
-        </div>
-
-        <h1>Διάλεξε τάξη</h1>
-        <div className="tabs grade-tabs">
-          {groups.map((g, i) => (
-            <button
-              key={g.title}
-              className={`tab ${i === activeTab ? "active" : ""}`}
-              onClick={() => setTab(i)}
-            >
-              {g.icon} {g.title}
-            </button>
-          ))}
-        </div>
-
-        <p className="muted rules">
-          ⏱️ {SECONDS_PER_QUESTION}″ ανά ερώτηση · ✅ {BASE_POINTS} πόντοι για σωστή + έως{" "}
-          {SPEED_POINTS} μπόνους ταχύτητας
-        </p>
-        {group.exam && (
-          <div className="exam-note">
-            📝 <b>{group.examTitle}:</b> {EXAM_QUESTIONS} ερωτήσεις από όλη την ύλη του
-            μαθήματος, {SECONDS_PER_EXAM_QUESTION}″ η καθεμία, με βαθμό στα 20 και λίστα με τα
-            λάθη για επανάληψη.
-          </div>
-        )}
-        {error && <p className="error">{error}</p>}
-
-        <div className="grid">
-          {group.subjects.map((s) => (
-            <div className="card" key={s.id}>
-              <div className="card-title">
-                <span className="icon">{ICONS[s.name] || "📘"}</span>
-                <span className="grow">
-                  {subjectName(s)}
-                  <span className="grade-chip">{s.grade}</span>
-                </span>
-                <button
-                  className="link"
-                  onClick={() => openBoard(s, s.levels[0].level)}
-                  title="Κατάταξη"
-                >
-                  🏆
-                </button>
-              </div>
-              <div className="levels">
-                {s.levels.map(({ level: lv, count }) => {
-                  const b = best[`${s.id}-${lv}`];
-                  return (
-                    <button
-                      key={lv}
-                      className={`level ${lv}`}
-                      onClick={() => startQuiz(s, lv)}
-                    >
-                      <span>
-                        {LEVELS[lv].emoji} {LEVELS[lv].label}
-                      </span>
-                      <small>
-                        {count} ερωτ.{b !== undefined ? ` · ρεκόρ ${b} π.` : ""}
-                      </small>
-                    </button>
-                  );
-                })}
-                {s.exam && (
-                  <button className="level exam" onClick={() => startQuiz(s, "exam")}>
-                    <span>📝 {s.examTitle}</span>
-                    <small>
-                      {EXAM_QUESTIONS} ερωτ.
-                      {best[`${s.id}-exam`] !== undefined
-                        ? ` · ρεκόρ ${best[`${s.id}-exam`]} π.`
-                        : ""}
-                    </small>
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   // Τέλος κουίζ
-  if (finished) {
+  if (subject && finished) {
     const percent = Math.round((correctCount / questions.length) * 100);
     const message =
       percent === 100
@@ -535,6 +534,8 @@ function App() {
         ? "Καλή προσπάθεια! 👍"
         : "Συνέχισε την επανάληψη! 💪";
     const mistakes = history.filter((h) => !h.ok);
+    const ch = chapterOf(subject, mode);
+    const nextChapter = ch ? subject.chapters[subject.chapters.indexOf(ch) + 1] : null;
     return (
       <div className="page">
         {header}
@@ -556,18 +557,27 @@ function App() {
             </>
           )}
           <p className="muted">
-            {subjectName(subject)} · {levelLabel(subject, level)} · {subject.grade}
+            {subject.name} · {modeLabel(subject, mode)} · {subject.grade}
           </p>
           {myRank > 0 && <p className="rank">Είσαι στη θέση #{myRank} της κατάταξης! 🎉</p>}
           {!name.trim() && (
             <p className="muted">Γράψε όνομα στην αρχική για να μπαίνεις στην κατάταξη.</p>
           )}
           <div className="actions">
-            <button className="primary" onClick={() => startQuiz(subject, level)}>
+            <button className="primary" onClick={() => startQuiz(subject, mode)} disabled={loading}>
               Ξανά
             </button>
-            <button className="secondary" onClick={goHome}>
-              Άλλο μάθημα
+            {nextChapter && (
+              <button
+                className="primary"
+                onClick={() => startQuiz(subject, `c${nextChapter.id}`)}
+                disabled={loading}
+              >
+                Επόμενο κεφάλαιο →
+              </button>
+            )}
+            <button className="secondary" onClick={back}>
+              Πίσω στο μάθημα
             </button>
           </div>
         </div>
@@ -605,63 +615,236 @@ function App() {
   }
 
   // Ερώτηση
-  const q = questions[current];
-  const progress = ((current + (picked !== null ? 1 : 0)) / questions.length) * 100;
-  const timePercent = (timeLeft / secondsPerQuestion) * 100;
-  const timeClass = timeLeft <= 5 ? "danger" : timeLeft <= 10 ? "warn" : "";
+  if (subject) {
+    const q = questions[current];
+    const progress = ((current + (picked !== null ? 1 : 0)) / questions.length) * 100;
+    const timePercent = (timeLeft / secondsPerQuestion) * 100;
+    const timeClass = timeLeft <= 5 ? "danger" : timeLeft <= 10 ? "warn" : "";
 
+    return (
+      <div className="page">
+        {header}
+        <div className="quiz-info">
+          <span className="quiz-title">
+            {icon(subject)} {subject.name} · {modeLabel(subject, mode)}
+          </span>
+          <span className="nowrap">
+            {current + 1}/{questions.length} · <b>{points} π.</b>
+          </span>
+        </div>
+        <div className="bar">
+          <div className="bar-fill" style={{ width: `${progress}%` }} />
+        </div>
+
+        <div className={`timer ${timeClass}`}>
+          <div className="timer-fill" style={{ width: `${timePercent}%` }} />
+          <span>⏱️ {Math.ceil(timeLeft)}″</span>
+        </div>
+
+        <h2 className="question">{q.question}</h2>
+
+        <div className="choices">
+          {q.choices.map((c, i) => {
+            let cls = "choice";
+            if (picked !== null) {
+              if (c.correct) cls += " correct";
+              else if (i === picked) cls += " wrong";
+              else cls += " faded";
+            }
+            return (
+              <button key={i} className={cls} onClick={() => answer(i)}>
+                {c.text}
+              </button>
+            );
+          })}
+        </div>
+
+        {picked !== null && (
+          <div className="feedback">
+            <span>
+              {picked === -1
+                ? "⏰ Τέλος χρόνου!"
+                : q.choices[picked].correct
+                ? `✅ Σωστό! +${lastGain}`
+                : "❌ Λάθος"}
+            </span>
+            <button className="primary" onClick={next}>
+              {current + 1 < questions.length ? "Επόμενη →" : "Αποτέλεσμα"}
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Οθόνη μαθήματος: κεφάλαια + επανάληψη όλης της ύλης
+  if (openSubject) {
+    const s = openSubject;
+    const review = s.reviewMode;
+    // ομαδοποίηση κεφαλαίων ανά ενότητα (αν το meta.json ορίζει «unit»)
+    const units = [];
+    s.chapters.forEach((c) => {
+      const last = units[units.length - 1];
+      if (last && last.unit === (c.unit || "")) last.items.push(c);
+      else units.push({ unit: c.unit || "", items: [c] });
+    });
+    return (
+      <div className="page">
+        {header}
+        <button className="link back-link" onClick={back}>
+          ← Όλα τα μαθήματα
+        </button>
+        <h1>
+          {icon(s)} {s.name}
+        </h1>
+        <p className="muted grade-line">
+          {s.grade} · {s.total} ερωτήσεις
+        </p>
+        {error && <p className="error">{error}</p>}
+
+        <button className="review-btn" onClick={() => startQuiz(s, review)} disabled={loading}>
+          <span className="review-btn-title">
+            {modeEmoji(review)} {modeLabel(s, review)}
+          </span>
+          <small>
+            {REVIEW_QUESTIONS} τυχαίες ερωτήσεις από όλη την ύλη
+            {review === "exam"
+              ? `, ${SECONDS_PER_EXAM_QUESTION}″ η καθεμία, με βαθμό στα 20`
+              : ""}
+            {bestText(s, review)}
+          </small>
+        </button>
+
+        {units.map((u, ui) => (
+          <div key={ui}>
+            {u.unit && <h2 className="unit-title">{u.unit}</h2>}
+            {!u.unit && ui === 0 && <h2 className="unit-title">Κεφάλαια</h2>}
+            <div className="chapters">
+              {u.items.map((c) => (
+                <button
+                  key={c.id}
+                  className="chapter"
+                  onClick={() => startQuiz(s, `c${c.id}`)}
+                  disabled={loading}
+                >
+                  <span className="chapter-num">{c.num}</span>
+                  <span className="chapter-text">
+                    <span>{c.title}</span>
+                    <small>
+                      {c.count} ερωτ.{bestText(s, `c${c.id}`)}
+                    </small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        {s.levels.length > 0 && (
+          <>
+            <h2 className="unit-title">
+              {s.chapters.length > 0 ? "Γενικές ερωτήσεις" : "Ερωτήσεις ανά δυσκολία"}
+            </h2>
+            <div className="levels">
+              {s.levels.map(({ level: lv, count }) => (
+                <button
+                  key={lv}
+                  className={`level ${lv}`}
+                  onClick={() => startQuiz(s, lv)}
+                  disabled={loading}
+                >
+                  <span>
+                    {LEVELS[lv].emoji} {LEVELS[lv].label}
+                  </span>
+                  <small>
+                    {count} ερωτ.{bestText(s, lv)}
+                  </small>
+                </button>
+              ))}
+            </div>
+            {s.chapters.length === 0 && (
+              <p className="muted small-note">
+                Τα κεφάλαια για αυτό το μάθημα θα προστεθούν σύντομα.
+              </p>
+            )}
+          </>
+        )}
+
+        <div className="actions">
+          <button className="secondary" onClick={() => openBoard(s, review)}>
+            🏆 Κατάταξη
+          </button>
+          <button className="secondary" onClick={back}>
+            Πίσω
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Αρχική
+  const activeTab = Math.min(Math.max(0, Number(tab) || 0), groups.length - 1);
+  const group = groups[activeTab];
   return (
     <div className="page">
       {header}
-      <div className="quiz-info">
-        <span>
-          {ICONS[subject.name] || "📘"} {subjectName(subject)} · {levelLabel(subject, level)}
-        </span>
-        <span>
-          {current + 1}/{questions.length} · <b>{points} π.</b>
-        </span>
-      </div>
-      <div className="bar">
-        <div className="bar-fill" style={{ width: `${progress}%` }} />
-      </div>
-
-      <div className={`timer ${timeClass}`}>
-        <div className="timer-fill" style={{ width: `${timePercent}%` }} />
-        <span>⏱️ {Math.ceil(timeLeft)}″</span>
+      <div className="panel name-panel">
+        <label htmlFor="player">Το όνομά σου (για την κατάταξη)</label>
+        <input
+          id="player"
+          value={name}
+          maxLength={20}
+          placeholder="π.χ. Νίκος Π."
+          onChange={(e) => setName(e.target.value)}
+        />
+        <small className="muted">
+          Αν το αφήσεις κενό, παίζεις κανονικά αλλά δεν μπαίνεις στην κατάταξη. Μη γράφεις
+          επώνυμο ολόκληρο — φαίνεται σε όλους.
+        </small>
       </div>
 
-      <h2 className="question">{q.question}</h2>
-
-      <div className="choices">
-        {q.choices.map((c, i) => {
-          let cls = "choice";
-          if (picked !== null) {
-            if (c.correct) cls += " correct";
-            else if (i === picked) cls += " wrong";
-            else cls += " faded";
-          }
-          return (
-            <button key={i} className={cls} onClick={() => answer(i)}>
-              {c.text}
-            </button>
-          );
-        })}
-      </div>
-
-      {picked !== null && (
-        <div className="feedback">
-          <span>
-            {picked === -1
-              ? "⏰ Τέλος χρόνου!"
-              : q.choices[picked].correct
-              ? `✅ Σωστό! +${lastGain}`
-              : "❌ Λάθος"}
-          </span>
-          <button className="primary" onClick={next}>
-            {current + 1 < questions.length ? "Επόμενη →" : "Αποτέλεσμα"}
+      <h1>Διάλεξε τάξη</h1>
+      <div className="tabs grade-tabs">
+        {groups.map((g, i) => (
+          <button
+            key={g.title}
+            className={`tab ${i === activeTab ? "active" : ""}`}
+            onClick={() => setTab(i)}
+          >
+            {g.icon} {g.title}
           </button>
+        ))}
+      </div>
+
+      <p className="muted rules">
+        ⏱️ {SECONDS_PER_QUESTION}″ ανά ερώτηση · ✅ {BASE_POINTS} πόντοι για σωστή + έως{" "}
+        {SPEED_POINTS} μπόνους ταχύτητας
+      </p>
+      {group.exam && (
+        <div className="exam-note">
+          📝 <b>{group.examTitle}:</b> {REVIEW_QUESTIONS} ερωτήσεις από όλη την ύλη του
+          μαθήματος, {SECONDS_PER_EXAM_QUESTION}″ η καθεμία, με βαθμό στα 20 και λίστα με τα
+          λάθη για επανάληψη.
         </div>
       )}
+
+      <h2 className="unit-title">Διάλεξε μάθημα</h2>
+      <div className="subjects">
+        {group.subjects.map((s) => (
+          <button className="subject" key={s.id} onClick={() => openSubjectPage(s)}>
+            <span className="icon">{icon(s)}</span>
+            <span className="subject-text">
+              <span className="subject-name">{s.name}</span>
+              <small className="muted">
+                {s.chapters.length > 0
+                  ? `${s.chapters.length} κεφάλαια · ${s.total} ερωτήσεις`
+                  : `${s.total} ερωτήσεις`}
+              </small>
+            </span>
+            <span className="chev">›</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

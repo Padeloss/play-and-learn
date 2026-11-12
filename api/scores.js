@@ -1,6 +1,8 @@
 // Πίνακας κατάταξης (leaderboard) για το Play and Learn.
 //
-// GET  /api/scores?key=7-easy        -> οι 10 καλύτεροι για μάθημα/δυσκολία
+// GET  /api/scores?key=1a2b3c4d-easy  -> οι 10 καλύτεροι για μάθημα/δυσκολία
+//   Το κλειδί είναι <σταθερό κλειδί μαθήματος>-<τρόπος>, όπου τρόπος:
+//   easy | medium | hard | exam (διαγώνισμα) | all (επανάληψη ύλης) | c<κεφάλαιο> (π.χ. c07, c30a)
 // POST /api/scores  { key, name, points, correct, total }  -> αποθήκευση σκορ
 //
 // Κάθε σκορ αποθηκεύεται ως ένα μικρό αρχείο στο Vercel Blob, και όλα τα
@@ -9,7 +11,7 @@
 // και χωρίς προβλήματα όταν δύο παίκτες τελειώνουν ταυτόχρονα.
 const { put, list } = require("@vercel/blob");
 
-const KEY_RE = /^\d{1,3}-(easy|medium|hard|exam)$/;
+const KEY_RE = /^[a-f0-9]{8}-(easy|medium|hard|exam|all|c[0-9a-z]{1,6})$/;
 const MAX_POINTS_PER_QUESTION = 200;
 const TOP = 10;
 
