@@ -3,6 +3,7 @@
 // Δύο «θέματα» ήχων, που ορίζονται ανά τάξη στο backend/lessons/grades.json ("sound"):
 //   kids  -> Δημοτικό: χαρούμενα καμπανάκια, απαλά και ευχάριστα
 //   metal -> Γυμνάσιο: ηλεκτρική κιθάρα με παραμόρφωση (power chords)
+//   arcade -> Λύκειο (ΕΠΑΛ): synthwave / ηχητικά εφέ ρετρό ηλεκτρονικού παιχνιδιού
 //
 // Κάθε θέμα έχει τρεις ήχους: correct (σωστό), wrong (λάθος), finish (τέλος κουίζ).
 
@@ -156,7 +157,48 @@ const metal = {
   },
 };
 
-const THEMES = { kids, metal };
+// ---------- Λύκειο: arcade / synthwave ----------
+
+// Μία νότα «chiptune»: τετραγωνικό κύμα με γρήγορο σβήσιμο
+function chip(ac, out, midi, start, length = 0.12, volume = 0.12, type = "square", slideTo = null) {
+  const osc = ac.createOscillator();
+  const gain = ac.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(hz(midi), start);
+  if (slideTo !== null) osc.frequency.exponentialRampToValueAtTime(hz(slideTo), start + length);
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(volume, start + 0.008);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + length);
+  osc.connect(gain).connect(out);
+  osc.start(start);
+  osc.stop(start + length + 0.03);
+}
+
+const arcade = {
+  // Γρήγορο «coin»: δύο νότες που ανεβαίνουν απότομα
+  correct(ac, out, t) {
+    chip(ac, out, 83, t, 0.07);
+    chip(ac, out, 88, t + 0.07, 0.3, 0.12);
+    chip(ac, out, 95, t + 0.07, 0.3, 0.05, "triangle");
+  },
+  // «Game over» ελαφρύ: κατεβαστό σάρωμα
+  wrong(ac, out, t) {
+    chip(ac, out, 62, t, 0.35, 0.14, "sawtooth", 38);
+    chip(ac, out, 50, t + 0.05, 0.3, 0.08, "square", 31);
+  },
+  // Αρπέγιο νίκης με συνθεσάιζερ
+  finish(ac, out, t) {
+    const notes = [60, 64, 67, 72, 76, 79, 84];
+    notes.forEach((n, i) => {
+      chip(ac, out, n, t + i * 0.08, 0.14, 0.11);
+      chip(ac, out, n - 12, t + i * 0.08, 0.14, 0.07, "sawtooth");
+    });
+    chip(ac, out, 84, t + notes.length * 0.08, 0.9, 0.12, "square");
+    chip(ac, out, 72, t + notes.length * 0.08, 0.9, 0.08, "sawtooth");
+  },
+};
+
+const THEMES = { kids, metal, arcade };
 
 export function playSound(name, theme, enabled) {
   if (!enabled) return;
