@@ -4,12 +4,19 @@
 //   Το κλειδί είναι <σταθερό κλειδί μαθήματος>-<τρόπος>, όπου τρόπος:
 //   easy | medium | hard | exam (διαγώνισμα) | all (επανάληψη ύλης) | c<κεφάλαιο> (π.χ. c07, c30a)
 // POST /api/scores  { key, name, points, correct, total }  -> αποθήκευση σκορ
+// GET  /api/scores?checkName=Νίκος     -> { ok: true/false } (έλεγχος ονόματος πριν το παιχνίδι)
+//
+// Διαχείριση (κρυφή σελίδα #/admin, χρειάζεται τον κωδικό ADMIN_KEY των ρυθμίσεων του Vercel):
+// GET    /api/scores?admin=1   (header x-admin-key)  -> όλα τα σκορ, με το url του καθενός
+// DELETE /api/scores  { url }  (header x-admin-key)  -> σβήνει ένα σκορ
 //
 // Κάθε σκορ αποθηκεύεται ως ένα μικρό αρχείο στο Vercel Blob, και όλα τα
 // στοιχεία του (πόντοι, χρόνος, όνομα) μπαίνουν μέσα στο ΟΝΟΜΑ του αρχείου.
 // Έτσι η ανάγνωση γίνεται με ένα απλό list(), χωρίς να διαβάζουμε αρχεία
 // και χωρίς προβλήματα όταν δύο παίκτες τελειώνουν ταυτόχρονα.
-const { put, list } = require("@vercel/blob");
+const crypto = require("crypto");
+const { put, list, del } = require("@vercel/blob");
+const { isBlockedName } = require("./_lib/nameFilter");
 
 const KEY_RE = /^[a-f0-9]{8}-(easy|medium|hard|exam|all|c[0-9a-z]{1,6})$/;
 const MAX_POINTS_PER_QUESTION = 200;
@@ -81,6 +88,41 @@ function cleanName(raw) {
     .slice(0, 20);
 }
 
+// Σωστός κωδικός διαχειριστή; (σύγκριση σταθερού χρόνου)
+function isAdmin(req) {
+  const expected = process.env.ADMIN_KEY || "";
+  const given = String(req.headers["x-admin-key"] || "");
+  if (!expected || given.length !== expected.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(given), Buffer.from(expected));
+}
+
+function parseBlob(blob) {
+  // scores/<key>/<points>_<correct>_<total>_<time>_<name>_<random>.txt
+  const parts = blob.pathname.split("/");
+  const file = parts.pop().replace(/\.txt$/, "");
+  const [points, correct, total, time, name] = file.split("_");
+  return {
+    key: parts[1] || "",
+    points: Number(points),
+    correct: Number(correct),
+    total: Number(total),
+    time: Number(time),
+    name: fromHex(name || ""),
+    url: blob.url,
+  };
+}
+
+async function readAll() {
+  const out = [];
+  let cursor;
+  do {
+    const page = await list({ prefix: "scores/", cursor, limit: 1000 });
+    for (const blob of page.blobs) out.push(parseBlob(blob));
+    cursor = page.hasMore ? page.cursor : undefined;
+  } while (cursor);
+  return out.sort((a, b) => b.time - a.time);
+}
+
 async function readTop(key) {
   const entries = [];
   for (const { prefix, from, to } of sourcesFor(key)) {
@@ -88,19 +130,15 @@ async function readTop(key) {
     do {
       const page = await list({ prefix, cursor, limit: 1000 });
       for (const blob of page.blobs) {
-        // scores/<key>/<points>_<correct>_<total>_<time>_<name>_<random>.txt
-        const file = blob.pathname
-          .split("/")
-          .pop()
-          .replace(/\.txt$/, "");
-        const [points, correct, total, time, name] = file.split("_");
-        if (!(Number(time) >= from && Number(time) < to)) continue; // σκορ άλλης εποχής
+        const e = parseBlob(blob);
+        if (!(e.time >= from && e.time < to)) continue; // σκορ άλλης εποχής
+        if (isBlockedName(e.name)) continue; // παλιό σκορ με όνομα που δεν επιτρέπεται
         entries.push({
-          points: Number(points),
-          correct: Number(correct),
-          total: Number(total),
-          time: Number(time),
-          name: fromHex(name || ""),
+          points: e.points,
+          correct: e.correct,
+          total: e.total,
+          time: e.time,
+          name: e.name,
         });
       }
       cursor = page.hasMore ? page.cursor : undefined;
@@ -121,6 +159,41 @@ module.exports = async function handler(req, res) {
   }
 
   try {
+    if (req.method === "GET" && req.query.checkName !== undefined) {
+      const name = cleanName(req.query.checkName);
+      return res.status(200).json({ ok: !isBlockedName(name) });
+    }
+
+    if (req.method === "GET" && req.query.admin) {
+      if (!isAdmin(req))
+        return res.status(401).json({ error: "Λάθος κωδικός" });
+      return res.status(200).json({ scores: await readAll() });
+    }
+
+    if (req.method === "DELETE") {
+      if (!isAdmin(req))
+        return res.status(401).json({ error: "Λάθος κωδικός" });
+      const body =
+        typeof req.body === "string"
+          ? JSON.parse(req.body || "{}")
+          : req.body || {};
+      let url;
+      try {
+        url = new URL(String(body.url || ""));
+      } catch {
+        return res.status(400).json({ error: "Λάθος σκορ" });
+      }
+      // σβήνουμε ΜΟΝΟ αρχεία σκορ του δικού μας αποθηκευτικού χώρου
+      if (
+        !url.hostname.endsWith(".blob.vercel-storage.com") ||
+        !url.pathname.startsWith("/scores/")
+      ) {
+        return res.status(400).json({ error: "Λάθος σκορ" });
+      }
+      await del(url.toString());
+      return res.status(200).json({ ok: true });
+    }
+
     if (req.method === "GET") {
       const key = String(req.query.key || "");
       if (!KEY_RE.test(key))
@@ -142,6 +215,13 @@ module.exports = async function handler(req, res) {
       if (!KEY_RE.test(key))
         return res.status(400).json({ error: "Λάθος μάθημα" });
       if (!name) return res.status(400).json({ error: "Γράψε όνομα" });
+      if (isBlockedName(name)) {
+        return res.status(400).json({
+          error:
+            "Αυτό το όνομα δεν επιτρέπεται. Διάλεξε άλλο όνομα για την κατάταξη.",
+          code: "name",
+        });
+      }
       if (!(total >= 1 && total <= 50))
         return res.status(400).json({ error: "Λάθος στοιχεία" });
       if (!(correct >= 0 && correct <= total))
@@ -165,7 +245,7 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ scores, rank });
     }
 
-    res.setHeader("Allow", "GET, POST");
+    res.setHeader("Allow", "GET, POST, DELETE");
     return res.status(405).json({ error: "Method not allowed" });
   } catch (err) {
     console.error(err);

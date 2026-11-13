@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import "../index.css";
 import { playSound } from "../sounds";
+import AdminPage from "./AdminPage";
 
 // Τρόποι παιχνιδιού ("mode"):
 //   easy | medium | hard  -> ερωτήσεις μιας δυσκολίας (μαθήματα χωρίς κεφάλαια)
@@ -13,6 +14,7 @@ import { playSound } from "../sounds";
 //   #/m/<κλειδί>                οθόνη μαθήματος
 //   #/m/<κλειδί>/play/<τρόπος>  κουίζ (π.χ. #/m/e535dba8/play/c07)
 //   #/m/<κλειδί>/board/<τρόπος> κατάταξη
+//   #/admin                     κρυφή σελίδα διαχείρισης της κατάταξης
 const LEVELS = {
   easy: { label: "Εύκολο", emoji: "🟢" },
   medium: { label: "Μέτριο", emoji: "🟡" },
@@ -174,6 +176,7 @@ function parseHash(hash) {
     .split("/")
     .filter(Boolean)
     .map((p) => decodeURIComponent(p));
+  if (parts[0] === "admin") return { screen: "admin" };
   if (parts[0] !== "m" || !parts[1]) return { screen: "home" };
   const key = parts[1];
   if ((parts[2] === "play" || parts[2] === "board") && parts[3]) {
@@ -184,6 +187,7 @@ function parseHash(hash) {
 
 function hashOf(route) {
   if (route.screen === "home") return "#/";
+  if (route.screen === "admin") return "#/admin";
   if (route.screen === "subject") return `#/m/${route.key}`;
   return `#/m/${route.key}/${route.screen}/${route.mode}`;
 }
@@ -286,6 +290,8 @@ function App() {
     return TIME_OPTIONS[t] ? t : "normal";
   });
   const [best, setBest] = useState(() => readStorage(BEST_KEY, {}));
+  const [nameBlocked, setNameBlocked] = useState(false); // το όνομα δεν επιτρέπεται στην κατάταξη
+  const [nameError, setNameError] = useState("");
 
   // ποια οθόνη δείχνουμε — διαβάζεται από τη διεύθυνση
   const [route, setRoute] = useState(() => parseHash(window.location.hash));
@@ -326,7 +332,7 @@ function App() {
     [groups]
   );
 
-  const subject = route.screen === "home" ? null : findSubject(route.key);
+  const subject = route.screen === "home" || route.screen === "admin" ? null : findSubject(route.key);
   const isExam = route.mode === "exam";
   const baseSeconds = isExam ? SECONDS_PER_EXAM_QUESTION : SECONDS_PER_QUESTION;
   const limitSeconds = baseSeconds * TIME_OPTIONS[timeMode].factor;
@@ -358,6 +364,27 @@ function App() {
   }, []);
 
   useEffect(() => writeStorage(NAME_KEY, name), [name]);
+
+  // Έλεγχος ονόματος στον server (ίδια λίστα με αυτή που ελέγχει την κατάταξη)
+  const checkName = useCallback((value) => {
+    const n = String(value || "").trim();
+    if (!n) {
+      setNameBlocked(false);
+      setNameError("");
+      return;
+    }
+    fetchJson(`/api/scores?checkName=${encodeURIComponent(n)}`)
+      .then((d) => {
+        setNameBlocked(!d.ok);
+        setNameError(d.ok ? "" : "Αυτό το όνομα δεν επιτρέπεται. Γράψε το μικρό σου όνομα ή ένα ευγενικό παρατσούκλι.");
+      })
+      .catch(() => {
+        /* αν δεν απαντά ο server, ο έλεγχος γίνεται ξανά στην αποθήκευση του σκορ */
+      });
+  }, []);
+  useEffect(() => {
+    checkName(readStorage(NAME_KEY, ""));
+  }, [checkName]);
   useEffect(() => writeStorage(SOUND_KEY, soundOn), [soundOn]);
   useEffect(() => writeStorage(TAB_KEY, tab), [tab]);
   useEffect(() => writeStorage(TIME_KEY, timeMode), [timeMode]);
@@ -576,7 +603,7 @@ function App() {
 
     setBoardLoading(true);
     setBoardError("");
-    const player = name.trim();
+    const player = nameBlocked ? "" : name.trim();
     const request = player
       ? fetch("/api/scores", {
           method: "POST",
@@ -589,6 +616,15 @@ function App() {
             total: questions.length,
           }),
         }).then(async (r) => {
+          if (r.status === 400) {
+            const data = await r.json().catch(() => ({}));
+            if (data.code === "name") {
+              setNameBlocked(true);
+              setNameError(data.error);
+              setBoardError(data.error);
+              return fetchBoard(key);
+            }
+          }
           if (!r.ok) throw new Error();
           const data = await r.json();
           setMyRank(data.rank || 0);
@@ -684,6 +720,17 @@ function App() {
 
   if (!groups) {
     return page(<p className="muted">Φόρτωση…</p>);
+  }
+
+  // Κρυφή σελίδα διαχείρισης
+  if (route.screen === "admin") {
+    const describeKey = (k) => {
+      const [base, m] = String(k).split("-");
+      const s = groups.flatMap((g) => g.subjects).find((x) => x.key === base);
+      if (!s) return `παλιό σκορ (${k})`;
+      return `${s.grade} · ${s.name} · ${isValidMode(s, m) ? modeLabel(s, m) : m}`;
+    };
+    return page(<AdminPage describeKey={describeKey} onBack={() => go({ screen: "home" })} />);
   }
 
   // Λάθος ή παλιό link
@@ -814,6 +861,11 @@ function App() {
           {myRank > 0 && <p className="rank">Είσαι στη θέση #{myRank} της κατάταξης!</p>}
           {!name.trim() && (
             <p className="muted">Γράψε όνομα στην αρχική για να μπαίνεις στην κατάταξη.</p>
+          )}
+          {name.trim() && nameBlocked && (
+            <p className="error" role="alert">
+              Το σκορ δεν μπήκε στην κατάταξη, γιατί το όνομα δεν επιτρέπεται. Άλλαξέ το στην αρχική.
+            </p>
           )}
           <div className="actions">
             {nextChapter && (
@@ -1033,9 +1085,6 @@ function App() {
                 </button>
               ))}
             </div>
-            {s.chapters.length === 0 && (
-              <p className="muted small-note">Τα κεφάλαια για αυτό το μάθημα θα προστεθούν σύντομα.</p>
-            )}
           </section>
         )}
 
@@ -1066,9 +1115,22 @@ function App() {
           autoComplete="off"
           spellCheck={false}
           placeholder="π.χ. Νίκος Π."
-          aria-describedby="player-help"
-          onChange={(e) => setName(e.target.value)}
+          aria-describedby={nameError ? "player-error player-help" : "player-help"}
+          aria-invalid={nameBlocked}
+          onChange={(e) => {
+            setName(e.target.value);
+            if (nameBlocked) {
+              setNameBlocked(false);
+              setNameError("");
+            }
+          }}
+          onBlur={(e) => checkName(e.target.value)}
         />
+        {nameError && (
+          <p className="field-error" id="player-error" role="alert">
+            {nameError}
+          </p>
+        )}
         <small className="muted" id="player-help">
           Αν το αφήσεις κενό, παίζεις κανονικά αλλά δεν μπαίνεις στην κατάταξη. Γράψε μόνο μικρό
           όνομα ή παρατσούκλι — φαίνεται σε όλους.
