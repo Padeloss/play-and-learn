@@ -54,6 +54,8 @@ const NAME_KEY = "playandlearn-name";
 const SOUND_KEY = "playandlearn-sound";
 const TAB_KEY = "playandlearn-tab";
 const TIME_KEY = "playandlearn-time";
+// Όνομα για δοκιμές: παίζεις κανονικά, αλλά το σκορ ΔΕΝ μπαίνει στην κατάταξη
+const TEST_NAME = "*5";
 
 // ---------- Βοηθητικά ----------
 
@@ -368,7 +370,7 @@ function App() {
   // Έλεγχος ονόματος στον server (ίδια λίστα με αυτή που ελέγχει την κατάταξη)
   const checkName = useCallback((value) => {
     const n = String(value || "").trim();
-    if (!n) {
+    if (!n || n === TEST_NAME) {
       setNameBlocked(false);
       setNameError("");
       return;
@@ -603,7 +605,7 @@ function App() {
 
     setBoardLoading(true);
     setBoardError("");
-    const player = nameBlocked ? "" : name.trim();
+    const player = nameBlocked || name.trim() === TEST_NAME ? "" : name.trim();
     const request = player
       ? fetch("/api/scores", {
           method: "POST",
@@ -861,6 +863,9 @@ function App() {
           {myRank > 0 && <p className="rank">Είσαι στη θέση #{myRank} της κατάταξης!</p>}
           {!name.trim() && (
             <p className="muted">Γράψε όνομα στην αρχική για να μπαίνεις στην κατάταξη.</p>
+          )}
+          {name.trim() === TEST_NAME && (
+            <p className="muted">Λειτουργία δοκιμής (όνομα {TEST_NAME}): το σκορ δεν μπήκε στην κατάταξη.</p>
           )}
           {name.trim() && nameBlocked && (
             <p className="error" role="alert">

@@ -215,6 +215,10 @@ module.exports = async function handler(req, res) {
       if (!KEY_RE.test(key))
         return res.status(400).json({ error: "Λάθος μάθημα" });
       if (!name) return res.status(400).json({ error: "Γράψε όνομα" });
+      // Όνομα δοκιμής: δεν αποθηκεύεται (για να μη γεμίζει η κατάταξη με δοκιμές)
+      if (name === "*5") {
+        return res.status(200).json({ scores: await readTop(key), rank: 0, test: true });
+      }
       if (isBlockedName(name)) {
         return res.status(400).json({
           error:
