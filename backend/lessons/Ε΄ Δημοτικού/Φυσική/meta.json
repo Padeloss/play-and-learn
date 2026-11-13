@@ -1,6 +1,6 @@
 {
   "grade": "Ε΄ Δημοτικού",
-  "source": "Φυσικά «Ερευνώ και Ανακαλύπτω» (ebooks.edu.gr), ύλη σύμφωνα με τις Οδηγίες Διδασκαλίας 2025-26: https://ebooks.edu.gr/ebooks/v/html/8547/2190/Fysika_E-Dimotikou_html-empl/",
+  "source": "Φυσική «Ερευνώ και Ανακαλύπτω» (ebooks.edu.gr), ύλη σύμφωνα με τις Οδηγίες Διδασκαλίας 2025-26: https://ebooks.edu.gr/ebooks/v/html/8547/2190/Fysika_E-Dimotikou_html-empl/",
   "chapters": [
     {
       "id": "01",
@@ -37,5 +37,6 @@
       "num": "7",
       "title": "Ήχος"
     }
-  ]
+  ],
+  "keyName": "Φυσικά"
 }

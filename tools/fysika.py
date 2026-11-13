@@ -1,4 +1,4 @@
-# Φυσικά Ε΄ και ΣΤ΄ Δημοτικού — «Ερευνώ και Ανακαλύπτω» (ebooks.edu.gr),
+# Φυσική Ε΄ και ΣΤ΄ Δημοτικού — «Ερευνώ και Ανακαλύπτω» (ebooks.edu.gr),
 # μόνο οι ενότητες που διδάσκονται σύμφωνα με τις Οδηγίες Διδασκαλίας 2025-26 του Υπουργείου.
 # Κάθε ερώτηση: (ερώτηση, σωστή, λάθος 1, λάθος 2, λάθος 3). Οι λάθος απαντήσεις είναι
 # σοβαρές, του ίδιου θέματος και παρόμοιου μήκους, ώστε η σωστή να μη «φαίνεται».
@@ -250,7 +250,7 @@ st("10", "Μηχανική", [
 ])
 
 def build(grade_folder, chapters, src, seed):
-    out_dir = os.path.join(BASE, grade_folder, "Φυσικά")
+    out_dir = os.path.join(BASE, grade_folder, "Φυσική")
     os.makedirs(os.path.join(out_dir, "chapters"), exist_ok=True)
     seen = set(); total = 0; meta = []
     for cid, title, qs in chapters:
@@ -268,7 +268,7 @@ def build(grade_folder, chapters, src, seed):
             json.dump(out, f, ensure_ascii=False, indent=2); f.write("\n")
         meta.append({"id": cid, "num": str(int(cid)), "title": title})
     with open(os.path.join(out_dir, "meta.json"), "w", encoding="utf8") as f:
-        json.dump({"grade": grade_folder, "source": "Φυσικά «Ερευνώ και Ανακαλύπτω» (ebooks.edu.gr), ύλη σύμφωνα με τις Οδηγίες Διδασκαλίας 2025-26: " + src, "chapters": meta}, f, ensure_ascii=False, indent=2); f.write("\n")
+        json.dump({"keyName": "Φυσικά", "grade": grade_folder, "source": "Φυσική «Ερευνώ και Ανακαλύπτω» (ebooks.edu.gr), ύλη σύμφωνα με τις Οδηγίες Διδασκαλίας 2025-26: " + src, "chapters": meta}, f, ensure_ascii=False, indent=2); f.write("\n")
     print(grade_folder, len(chapters), "ενότητες,", total, "ερωτήσεις")
 
 build("Ε΄ Δημοτικού", E, SRC_E, "fys-e")

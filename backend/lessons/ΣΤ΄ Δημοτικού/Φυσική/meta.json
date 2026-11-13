@@ -1,6 +1,6 @@
 {
   "grade": "ΣΤ΄ Δημοτικού",
-  "source": "Φυσικά «Ερευνώ και Ανακαλύπτω» (ebooks.edu.gr), ύλη σύμφωνα με τις Οδηγίες Διδασκαλίας 2025-26: https://ebooks.edu.gr/ebooks/v/html/8547/2011/Fysika_ST-Dimotikou_html-empl/",
+  "source": "Φυσική «Ερευνώ και Ανακαλύπτω» (ebooks.edu.gr), ύλη σύμφωνα με τις Οδηγίες Διδασκαλίας 2025-26: https://ebooks.edu.gr/ebooks/v/html/8547/2011/Fysika_ST-Dimotikou_html-empl/",
   "chapters": [
     {
       "id": "01",
@@ -52,5 +52,6 @@
       "num": "10",
       "title": "Μηχανική"
     }
-  ]
+  ],
+  "keyName": "Φυσικά"
 }

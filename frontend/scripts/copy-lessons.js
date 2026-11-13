@@ -125,7 +125,7 @@ const index = grades.map((g) => {
 
     return {
       id,
-      key: stableKey(g.folder, name),
+      key: stableKey(g.folder, meta.keyName || name), // keyName: παλιό όνομα μαθήματος, ώστε να μη χαθούν σκορ
       name: nfc(name),
       grade: meta.grade || g.title,
       source: meta.source || undefined,
