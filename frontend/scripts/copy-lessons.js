@@ -46,7 +46,10 @@ function checkQuestions(list, file) {
     if (!q.question || !Array.isArray(q.choices) || q.choices.length < 2) {
       fail(`${where}: η ερώτηση #${i + 1} δεν έχει κείμενο ή επιλογές`);
     }
-    if (!(n >= 1 && n <= q.choices.length)) {
+    if (!q.choices.every((c) => typeof c === "string" && c.trim() !== "")) {
+      fail(`${where}: η ερώτηση #${i + 1} έχει κενή ή μη κειμενική επιλογή`);
+    }
+    if (!(Number.isInteger(n) && n >= 1 && n <= q.choices.length)) {
       fail(`${where}: η ερώτηση #${i + 1} έχει λάθος σωστή απάντηση ("${q.answer}")`);
     }
   });
