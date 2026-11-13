@@ -930,6 +930,8 @@ function App() {
     const timeClass = !timed ? "off" : timeLeft <= 5 ? "danger" : timeLeft <= 10 ? "warn" : "";
     const correctText = q.choices.find((c) => c.correct).text;
     const wrong = picked !== null && (picked === -1 || !q.choices[picked].correct);
+    let streak = 0;
+    for (let i = history.length - 1; i >= 0 && history[i].ok; i--) streak++;
 
     return page(
       <>
@@ -939,6 +941,11 @@ function App() {
           </button>
           <span className="nowrap">
             {current + 1}/{questions.length} · <b>{points} π.</b>
+            {streak >= 2 && (
+              <span className="streak" aria-label={`Σερί ${streak} σωστές`}>
+                <Icon>🔥</Icon> ×{streak}
+              </span>
+            )}
           </span>
         </div>
         <p className="quiz-title">
@@ -962,7 +969,7 @@ function App() {
           </span>
         </div>
 
-        <h1 className="question" ref={questionHeading} tabIndex={-1}>
+        <h1 className="question" key={current} ref={questionHeading} tabIndex={-1}>
           {q.question}
         </h1>
 

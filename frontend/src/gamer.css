@@ -1,0 +1,466 @@
+/* Gamer θέμα: σκούρο φόντο, νέον χρώματα και εφέ.
+   Φορτώνεται μετά το index.css και αλλάζει μόνο εμφάνιση (όχι λειτουργία). */
+
+:root {
+  --bg: #0a0e1f;
+  --panel: #131a35;
+  --panel-2: #1a2347;
+  --line: #2b3668;
+  --text: #e8ebff;
+  --text-soft: #b4bcea;
+  --cyan: #22d3ee;
+  --violet: #8b5cf6;
+  --pink: #f472b6;
+  --green: #34d399;
+  --red: #fb7185;
+  --yellow: #fbbf24;
+}
+
+body {
+  background:
+    radial-gradient(900px 500px at 85% -10%, rgba(139, 92, 246, 0.28), transparent 60%),
+    radial-gradient(700px 420px at -10% 10%, rgba(34, 211, 238, 0.18), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+  color: var(--text);
+}
+
+/* Ελαφρύ πλέγμα στο φόντο, σαν οθόνη παιχνιδιού */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(139, 92, 246, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(139, 92, 246, 0.07) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.8), transparent 75%);
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.8), transparent 75%);
+  z-index: 0;
+}
+
+.page {
+  position: relative;
+  z-index: 1;
+}
+
+h1,
+.section-title,
+.board-title,
+.unit-title,
+.dialog h2 {
+  color: var(--text);
+}
+
+.muted,
+.chapter-text small,
+.board .pts small,
+.level small,
+.quiz-info {
+  color: var(--text-soft);
+}
+
+.logo {
+  color: var(--cyan);
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  text-shadow: 0 0 14px rgba(34, 211, 238, 0.65);
+}
+
+.icon-btn {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+
+.icon-btn:hover {
+  border-color: var(--cyan);
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.35);
+}
+
+.link,
+.back-link {
+  color: var(--cyan);
+}
+
+.error,
+.field-error {
+  background: rgba(251, 113, 133, 0.14);
+  color: #fecdd3;
+  border: 1px solid rgba(251, 113, 133, 0.5);
+}
+
+.field-error {
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+/* Κάρτες και πάνελ */
+.panel,
+.result,
+.subject,
+.chapter,
+.level {
+  background: linear-gradient(160deg, var(--panel-2), var(--panel));
+  color: var(--text);
+  border: 1px solid var(--line);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
+}
+
+.subject:hover,
+.chapter:hover,
+.level:hover {
+  border-color: var(--cyan);
+  background: linear-gradient(160deg, #202b58, var(--panel));
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.28), 0 6px 22px rgba(0, 0, 0, 0.4);
+  transform: translateY(-2px);
+}
+
+.subject-name {
+  color: var(--text);
+}
+
+.chev {
+  color: var(--cyan);
+}
+
+.chapter-num {
+  background: rgba(139, 92, 246, 0.25);
+  color: #ddd6fe;
+  border: 1px solid rgba(139, 92, 246, 0.6);
+}
+
+/* Κουμπιά */
+.primary {
+  background: linear-gradient(135deg, #7c3aed, #2563eb);
+  color: #fff;
+  box-shadow: 0 0 16px rgba(124, 58, 237, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  transition: transform 0.1s, box-shadow 0.2s;
+}
+
+.primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 24px rgba(37, 99, 235, 0.7);
+}
+
+.primary:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+.primary.danger {
+  background: linear-gradient(135deg, #be123c, #dc2626);
+  box-shadow: 0 0 16px rgba(220, 38, 38, 0.45);
+}
+
+.secondary {
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: inset 0 0 0 2px var(--line);
+}
+
+.secondary:hover {
+  box-shadow: inset 0 0 0 2px var(--cyan);
+}
+
+.review-btn {
+  background: linear-gradient(135deg, #7c3aed, #0891b2);
+  box-shadow: 0 0 22px rgba(124, 58, 237, 0.45);
+}
+
+.review-btn:hover {
+  background: linear-gradient(135deg, #8b5cf6, #06b6d4);
+}
+
+.review-btn small {
+  color: #f0f4ff;
+}
+
+/* Μπάρες και χρονόμετρο */
+.bar,
+.timer {
+  background: #1b2347;
+  border: 1px solid var(--line);
+}
+
+.bar-fill {
+  background: linear-gradient(90deg, var(--cyan), var(--violet));
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.6);
+}
+
+.timer-fill {
+  background: linear-gradient(90deg, #10b981, var(--green));
+}
+
+.timer.warn .timer-fill {
+  background: linear-gradient(90deg, #d97706, var(--yellow));
+}
+
+.timer.danger .timer-fill {
+  background: linear-gradient(90deg, #dc2626, var(--red));
+  animation: pulse-danger 0.7s ease-in-out infinite;
+}
+
+.timer.off .timer-fill {
+  background: #2b3668;
+}
+
+/* Ο αριθμός μέσα στη μπάρα πρέπει να φαίνεται πάνω σε όλα τα χρώματα */
+.timer > span {
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+@keyframes pulse-danger {
+  50% {
+    opacity: 0.65;
+  }
+}
+
+/* Ερώτηση και επιλογές */
+.question {
+  animation: slide-in 0.35s ease-out;
+  text-shadow: 0 0 18px rgba(139, 92, 246, 0.35);
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.choice {
+  background: linear-gradient(160deg, var(--panel-2), var(--panel));
+  color: var(--text);
+  border: 2px solid var(--line);
+  transition: transform 0.12s, border-color 0.15s, box-shadow 0.15s;
+}
+
+@media (hover: hover) {
+  .choice:hover {
+    border-color: var(--cyan);
+    box-shadow: 0 0 16px rgba(34, 211, 238, 0.35);
+    transform: translateY(-2px);
+  }
+}
+
+.choice:active {
+  transform: scale(0.98);
+}
+
+.choice.correct {
+  background: linear-gradient(160deg, #064e3b, #065f46);
+  border-color: var(--green);
+  color: #ecfdf5;
+  animation: pop 0.4s ease-out;
+  box-shadow: 0 0 22px rgba(52, 211, 153, 0.65);
+}
+
+.choice.wrong {
+  background: linear-gradient(160deg, #7f1d1d, #991b1b);
+  border-color: var(--red);
+  color: #fff1f2;
+  animation: shake 0.4s ease-in-out;
+  box-shadow: 0 0 18px rgba(251, 113, 133, 0.5);
+}
+
+.choice.faded {
+  opacity: 0.45;
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.04);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-7px);
+  }
+  40% {
+    transform: translateX(7px);
+  }
+  60% {
+    transform: translateX(-5px);
+  }
+  80% {
+    transform: translateX(5px);
+  }
+}
+
+.feedback-text {
+  color: var(--text);
+}
+
+/* Σερί σωστών (combo) */
+.streak {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 10px;
+  border-radius: 99px;
+  font-weight: 800;
+  color: #1c1002;
+  background: linear-gradient(135deg, var(--yellow), #fb923c);
+  box-shadow: 0 0 14px rgba(251, 146, 60, 0.75);
+  animation: pop 0.4s ease-out;
+}
+
+.gain {
+  display: inline-block;
+  color: var(--green);
+  animation: float-up 0.7s ease-out;
+}
+
+@keyframes float-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Αποτέλεσμα */
+.big {
+  background: linear-gradient(135deg, var(--cyan), var(--pink));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 12px rgba(244, 114, 182, 0.5));
+  animation: pop 0.6s ease-out;
+}
+
+/* Πεδία */
+.name-panel input,
+.select {
+  background: #0d1330;
+  color: var(--text);
+  border: 2px solid var(--line);
+}
+
+.name-panel input:focus,
+.select:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.4);
+}
+
+.name-panel input[aria-invalid="true"] {
+  border-color: var(--red);
+}
+
+/* Καρτέλες και επιλογή χρόνου */
+.tab,
+.segmented label {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+
+.tab:hover,
+.segmented label:hover {
+  border-color: var(--cyan);
+}
+
+.tab.active,
+.segmented label.on {
+  background: linear-gradient(135deg, #7c3aed, #2563eb);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 0 14px rgba(124, 58, 237, 0.55);
+}
+
+/* Κατάταξη */
+.board li {
+  border-bottom: 1px solid var(--line);
+}
+
+.board li.me {
+  background: rgba(34, 211, 238, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.5);
+}
+
+.rank {
+  color: var(--cyan);
+}
+
+/* Διαγώνισμα, επανάληψη λαθών */
+.exam-note {
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.5);
+  color: #fef3c7;
+}
+
+.review-item,
+.admin-list li {
+  border-bottom-color: var(--line);
+}
+
+.review-wrong {
+  color: #fda4af;
+}
+
+.review-right {
+  color: #6ee7b7;
+}
+
+/* Παράθυρο «Να βγεις;» */
+.dialog {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--cyan);
+  box-shadow: 0 0 30px rgba(34, 211, 238, 0.35);
+}
+
+.dialog::backdrop {
+  background: rgba(5, 8, 20, 0.75);
+}
+
+/* Εστίαση πληκτρολογίου */
+:focus-visible {
+  outline-color: var(--cyan);
+}
+
+.primary:focus-visible,
+.review-btn:focus-visible,
+.tab.active:focus-visible {
+  outline-color: var(--yellow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .question,
+  .choice.correct,
+  .choice.wrong,
+  .streak,
+  .gain,
+  .big,
+  .timer.danger .timer-fill {
+    animation: none !important;
+  }
+  .subject:hover,
+  .chapter:hover,
+  .choice:hover,
+  .primary:hover {
+    transform: none;
+  }
+}

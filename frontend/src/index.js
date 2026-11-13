@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import "./index.css"; 
+import "./index.css";
+import "./gamer.css";
 import App from "./components/App"; // ✅ Εδώ δεν πρέπει να υπάρχει "./components/components"
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
