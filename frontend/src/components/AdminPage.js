@@ -3,6 +3,8 @@ import React, { useState } from "react";
 // Κρυφή σελίδα διαχείρισης της κατάταξης: play-and-learn.vercel.app/#/admin
 // Χρειάζεται τον κωδικό ADMIN_KEY (ρυθμίσεις του project στο Vercel → Environment Variables).
 // Δείχνει όλα τα σκορ (τα νεότερα πρώτα) και επιτρέπει να σβηστεί όποιο έχει άσχημο όνομα.
+// Δείχνει και τα «κλειδωμένα» ονόματα: «Ξεκλείδωσε» αν κάποιος ξέχασε τον κωδικό του
+// (την επόμενη φορά που θα παίξει, το όνομα κλειδώνει ξανά και παίρνει νέο κωδικό).
 
 const ADMIN_KEY_STORAGE = "playandlearn-admin";
 
@@ -30,6 +32,8 @@ function AdminPage({ describeKey, onBack }) {
   const [filter, setFilter] = useState("");
   const [confirmUrl, setConfirmUrl] = useState("");
   const [message, setMessage] = useState("");
+  const [players, setPlayers] = useState([]);
+  const [confirmPlayer, setConfirmPlayer] = useState("");
 
   async function load(k = code) {
     setLoading(true);
@@ -42,6 +46,7 @@ function AdminPage({ describeKey, onBack }) {
       const data = await r.json();
       saveKey(k);
       setScores(data.scores || []);
+      setPlayers(data.players || []);
     } catch (e) {
       setScores(null);
       setError(e.message);
@@ -64,6 +69,23 @@ function AdminPage({ describeKey, onBack }) {
       setMessage(`Σβήστηκε: «${s.name}» (${s.points} π.)`);
     } catch {
       setError("Δεν σβήστηκε. Δοκίμασε ξανά.");
+    }
+  }
+
+  async function unlock(p) {
+    setError("");
+    try {
+      const r = await fetch("/api/scores", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", "x-admin-key": code },
+        body: JSON.stringify({ player: p.name }),
+      });
+      if (!r.ok) throw new Error();
+      setPlayers((list) => list.filter((x) => x.name !== p.name));
+      setConfirmPlayer("");
+      setMessage(`Ξεκλείδωσε το όνομα «${p.name}».`);
+    } catch {
+      setError("Δεν ξεκλείδωσε. Δοκίμασε ξανά.");
     }
   }
 
@@ -153,6 +175,40 @@ function AdminPage({ describeKey, onBack }) {
                   ) : (
                     <button className="secondary" onClick={() => setConfirmUrl(s.url)}>
                       Σβήσε
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <h2>Ονόματα παικτών ({players.length})</h2>
+          <p className="muted">
+            Κάθε όνομα ανήκει σε έναν παίκτη. Αν κάποιος ξέχασε τον κωδικό του, πάτα «Ξεκλείδωσε».
+          </p>
+          <div className="panel">
+            {players.length === 0 && <p className="muted">Κανένα όνομα ακόμα.</p>}
+            <ul className="admin-list">
+              {players.map((p) => (
+                <li key={p.name}>
+                  <div className="admin-info">
+                    <b>{p.name}</b>
+                    <small className="muted">
+                      {p.devices} {p.devices === 1 ? "συσκευή" : "συσκευές"}
+                    </small>
+                  </div>
+                  {confirmPlayer === p.name ? (
+                    <span className="admin-actions">
+                      <button className="primary danger" onClick={() => unlock(p)}>
+                        Σίγουρα
+                      </button>
+                      <button className="secondary" onClick={() => setConfirmPlayer("")}>
+                        Άκυρο
+                      </button>
+                    </span>
+                  ) : (
+                    <button className="secondary" onClick={() => setConfirmPlayer(p.name)}>
+                      Ξεκλείδωσε
                     </button>
                   )}
                 </li>

@@ -464,3 +464,20 @@ h1,
     transform: none;
   }
 }
+
+/* Όνομα που το έχει άλλος παίκτης / κωδικός ονόματος */
+.name-taken {
+  border: 1px solid var(--yellow);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 214, 0, 0.08);
+}
+.name-taken p { margin: 0 0 8px; }
+.pin-row { display: flex; gap: 8px; align-items: center; }
+.pin-row input { width: 8.5em; min-height: 44px; text-align: center; letter-spacing: 0.2em; font-size: 1.1rem; }
+.pin-note {
+  border: 1px solid var(--green);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(0, 255, 140, 0.08);
+}

@@ -4,11 +4,20 @@
 //   Το κλειδί είναι <σταθερό κλειδί μαθήματος>-<τρόπος>, όπου τρόπος:
 //   easy | medium | hard | exam (διαγώνισμα) | all (επανάληψη ύλης) | c<κεφάλαιο> (π.χ. c07, c30a)
 // POST /api/scores  { key, name, points, correct, total }  -> αποθήκευση σκορ
-// GET  /api/scores?checkName=Νίκος     -> { ok: true/false } (έλεγχος ονόματος πριν το παιχνίδι)
+// GET  /api/scores?checkName=Νίκος&token=…  -> { ok, status } (έλεγχος ονόματος πριν το παιχνίδι)
+//        status: "free" (ελεύθερο) | "mine" (δικό μου) | "taken" (το έχει άλλος) | "blocked"
+// POST /api/scores  { action: "claim", name, token, pin }  -> «είμαι εγώ»: με τον 4ψήφιο κωδικό
+//        το όνομα συνδέεται και με αυτή τη συσκευή
+//
+// Ονόματα παικτών: την πρώτη φορά που κάποιος μπαίνει στην κατάταξη με ένα όνομα, το όνομα
+// «κλειδώνει» στη συσκευή του (token στο localStorage) και του δίνεται ένας 4ψήφιος κωδικός.
+// Άλλη συσκευή με το ίδιο όνομα χρειάζεται τον κωδικό, αλλιώς διαλέγει άλλο όνομα.
+// Στην κατάταξη κάθε παίκτης εμφανίζεται μία φορά (με το καλύτερο σκορ του).
 //
 // Διαχείριση (κρυφή σελίδα #/admin, χρειάζεται τον κωδικό ADMIN_KEY των ρυθμίσεων του Vercel):
 // GET    /api/scores?admin=1   (header x-admin-key)  -> όλα τα σκορ, με το url του καθενός
 // DELETE /api/scores  { url }  (header x-admin-key)  -> σβήνει ένα σκορ
+// DELETE /api/scores  { player }  (header x-admin-key) -> ξεκλειδώνει ένα όνομα (ξεχασμένος κωδικός)
 //
 // Κάθε σκορ αποθηκεύεται ως ένα μικρό αρχείο στο Vercel Blob, και όλα τα
 // στοιχεία του (πόντοι, χρόνος, όνομα) μπαίνουν μέσα στο ΟΝΟΜΑ του αρχείου.
@@ -80,6 +89,80 @@ function fromHex(text) {
   }
 }
 
+// Ίδιο όνομα με άλλη γραφή (κεφαλαία, τόνοι, τελικό σ) = ίδιος παίκτης
+function normName(raw) {
+  return cleanName(raw)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/ς/g, "σ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const TOKEN_RE = /^[A-Za-z0-9-]{16,64}$/;
+
+function hash(text) {
+  return crypto.createHash("sha256").update(text).digest("hex").slice(0, 40);
+}
+
+function playerPrefix(norm) {
+  return `players/${toHex(norm)}/`;
+}
+
+// Τα αρχεία ενός ονόματος: t_<hash συσκευής> (μία ανά συσκευή) και p_<hash κωδικού>
+async function playerFiles(norm) {
+  const page = await list({ prefix: playerPrefix(norm), limit: 1000 });
+  return page.blobs.map((b) => ({
+    file: b.pathname.split("/").pop().replace(/\.txt$/, ""),
+    url: b.url,
+  }));
+}
+
+async function putMarker(pathname) {
+  await put(pathname, "1", {
+    access: "public",
+    addRandomSuffix: false,
+    contentType: "text/plain",
+  });
+}
+
+const tokenFile = (norm, token) => `t_${hash(`t:${norm}:${token}`)}`;
+const pinFile = (norm, pin) => `p_${hash(`p:${norm}:${pin}`)}`;
+
+// "free" | "mine" | "taken"
+async function nameStatus(norm, token) {
+  const files = await playerFiles(norm);
+  if (files.length === 0) return "free";
+  if (TOKEN_RE.test(token) && files.some((f) => f.file === tokenFile(norm, token))) return "mine";
+  return "taken";
+}
+
+// Κλειδώνει ένα ελεύθερο όνομα στη συσκευή και επιστρέφει τον νέο 4ψήφιο κωδικό
+async function registerName(norm, token) {
+  const pin = String(crypto.randomInt(0, 10000)).padStart(4, "0");
+  await putMarker(`${playerPrefix(norm)}${pinFile(norm, pin)}.txt`);
+  await putMarker(`${playerPrefix(norm)}${tokenFile(norm, token)}.txt`);
+  return pin;
+}
+
+async function readPlayers() {
+  const byName = new Map();
+  let cursor;
+  do {
+    const page = await list({ prefix: "players/", cursor, limit: 1000 });
+    for (const b of page.blobs) {
+      const hex = b.pathname.split("/")[1];
+      const entry = byName.get(hex) || { name: fromHex(hex), devices: 0, time: 0 };
+      if (b.pathname.split("/").pop().startsWith("t_")) entry.devices++;
+      entry.time = Math.max(entry.time, new Date(b.uploadedAt).getTime() || 0);
+      byName.set(hex, entry);
+    }
+    cursor = page.hasMore ? page.cursor : undefined;
+  } while (cursor);
+  return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name, "el"));
+}
+
 function cleanName(raw) {
   return String(raw || "")
     .replace(/[\u0000-\u001f<>]/g, "")
@@ -146,7 +229,15 @@ async function readTop(key) {
   }
 
   entries.sort((a, b) => b.points - a.points || a.time - b.time);
-  return entries.slice(0, TOP);
+  // κάθε παίκτης μία φορά: κρατάμε μόνο το καλύτερο σκορ του
+  const seen = new Set();
+  const unique = entries.filter((e) => {
+    const n = normName(e.name);
+    if (seen.has(n)) return false;
+    seen.add(n);
+    return true;
+  });
+  return unique.slice(0, TOP);
 }
 
 module.exports = async function handler(req, res) {
@@ -161,13 +252,17 @@ module.exports = async function handler(req, res) {
   try {
     if (req.method === "GET" && req.query.checkName !== undefined) {
       const name = cleanName(req.query.checkName);
-      return res.status(200).json({ ok: !isBlockedName(name) });
+      if (!name) return res.status(200).json({ ok: true, status: "free" });
+      if (isBlockedName(name)) return res.status(200).json({ ok: false, status: "blocked" });
+      const status = await nameStatus(normName(name), String(req.query.token || ""));
+      return res.status(200).json({ ok: true, status });
     }
 
     if (req.method === "GET" && req.query.admin) {
       if (!isAdmin(req))
         return res.status(401).json({ error: "Λάθος κωδικός" });
-      return res.status(200).json({ scores: await readAll() });
+      const [scores, players] = await Promise.all([readAll(), readPlayers()]);
+      return res.status(200).json({ scores, players });
     }
 
     if (req.method === "DELETE") {
@@ -177,6 +272,13 @@ module.exports = async function handler(req, res) {
         typeof req.body === "string"
           ? JSON.parse(req.body || "{}")
           : req.body || {};
+      if (body.player !== undefined) {
+        const norm = normName(body.player);
+        if (!norm) return res.status(400).json({ error: "Λάθος όνομα" });
+        const files = await playerFiles(norm);
+        await Promise.all(files.map((f) => del(f.url)));
+        return res.status(200).json({ ok: true });
+      }
       let url;
       try {
         url = new URL(String(body.url || ""));
@@ -206,8 +308,25 @@ module.exports = async function handler(req, res) {
         typeof req.body === "string"
           ? JSON.parse(req.body || "{}")
           : req.body || {};
+      // «Είμαι εγώ»: σύνδεση του ονόματος με αυτή τη συσκευή με τον κωδικό
+      if (body.action === "claim") {
+        const norm = normName(body.name);
+        const token = String(body.token || "");
+        const pin = String(body.pin || "").trim();
+        if (!norm || !TOKEN_RE.test(token) || !/^\d{4}$/.test(pin)) {
+          return res.status(400).json({ error: "Γράψε τον 4ψήφιο κωδικό σου." });
+        }
+        const files = await playerFiles(norm);
+        if (!files.some((f) => f.file === pinFile(norm, pin))) {
+          return res.status(403).json({ error: "Λάθος κωδικός. Δοκίμασε ξανά ή διάλεξε άλλο όνομα." });
+        }
+        await putMarker(`${playerPrefix(norm)}${tokenFile(norm, token)}.txt`);
+        return res.status(200).json({ ok: true });
+      }
+
       const key = String(body.key || "");
       const name = cleanName(body.name);
+      const token = String(body.token || "");
       const total = Math.floor(Number(body.total));
       const correct = Math.floor(Number(body.correct));
       const points = Math.floor(Number(body.points));
@@ -234,6 +353,22 @@ module.exports = async function handler(req, res) {
         return res.status(400).json({ error: "Λάθος στοιχεία" });
       }
 
+      // Το όνομα ανήκει σε άλλον παίκτη; Αν είναι ελεύθερο, κλειδώνει σε αυτή τη συσκευή.
+      const norm = normName(name);
+      let newPin = "";
+      if (!TOKEN_RE.test(token)) {
+        return res.status(400).json({ error: "Λάθος στοιχεία" });
+      }
+      const status = await nameStatus(norm, token);
+      if (status === "taken") {
+        return res.status(409).json({
+          error:
+            "Αυτό το όνομα το έχει ήδη άλλος παίκτης. Αν είσαι εσύ, γράψε τον κωδικό σου στην αρχική· αλλιώς διάλεξε άλλο όνομα.",
+          code: "taken",
+        });
+      }
+      if (status === "free") newPin = await registerName(norm, token);
+
       const time = Date.now();
       const rand = Math.random().toString(36).slice(2, 8);
       const pathname = `scores/${key}/${String(points).padStart(6, "0")}_${correct}_${total}_${time}_${toHex(name)}_${rand}.txt`;
@@ -244,9 +379,9 @@ module.exports = async function handler(req, res) {
       });
 
       const scores = await readTop(key);
-      const rank =
-        scores.findIndex((s) => s.time === time && s.name === name) + 1;
-      return res.status(200).json({ scores, rank });
+      // θέση του παίκτη (με το καλύτερο σκορ του, που μπορεί να είναι παλιότερο)
+      const rank = scores.findIndex((s) => normName(s.name) === norm) + 1;
+      return res.status(200).json({ scores, rank, pin: newPin || undefined });
     }
 
     res.setHeader("Allow", "GET, POST, DELETE");

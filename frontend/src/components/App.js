@@ -55,6 +55,31 @@ const TAB_KEY = "playandlearn-tab";
 const TIME_KEY = "playandlearn-time";
 // Όνομα για δοκιμές: παίζεις κανονικά, αλλά το σκορ ΔΕΝ μπαίνει στην κατάταξη
 const TEST_NAME = "*5";
+const DEVICE_KEY = "playandlearn-device"; // τυχαίο αναγνωριστικό αυτής της συσκευής (για τα ονόματα)
+const PINS_KEY = "playandlearn-pins"; // οι κωδικοί των ονομάτων που έχει αυτή η συσκευή
+
+// Ίδιο όνομα με άλλη γραφή (κεφαλαία, τόνοι, τελικό σ) = ίδιο όνομα (όπως και στον server)
+function normName(n) {
+  return String(n || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/ς/g, "σ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function deviceToken() {
+  let t = readStorage(DEVICE_KEY, "");
+  if (!/^[A-Za-z0-9-]{16,64}$/.test(t)) {
+    t =
+      window.crypto && window.crypto.randomUUID
+        ? window.crypto.randomUUID()
+        : Array.from({ length: 32 }, () => Math.floor(Math.random() * 36).toString(36)).join("");
+    writeStorage(DEVICE_KEY, t);
+  }
+  return t;
+}
 
 // ---------- Βοηθητικά ----------
 
@@ -293,6 +318,13 @@ function App() {
   const [best, setBest] = useState(() => readStorage(BEST_KEY, {}));
   const [nameBlocked, setNameBlocked] = useState(false); // το όνομα δεν επιτρέπεται στην κατάταξη
   const [nameError, setNameError] = useState("");
+  // κατάσταση ονόματος: "" (άγνωστη) | "free" | "mine" | "taken"
+  const [nameStatus, setNameStatus] = useState("");
+  const [pins, setPins] = useState(() => readStorage(PINS_KEY, {}));
+  const [pinInput, setPinInput] = useState("");
+  const [claimError, setClaimError] = useState("");
+  const [claiming, setClaiming] = useState(false);
+  const [newPin, setNewPin] = useState(""); // κωδικός που μόλις δόθηκε (οθόνη αποτελέσματος)
 
   // ποια οθόνη δείχνουμε — διαβάζεται από τη διεύθυνση
   const [route, setRoute] = useState(() => parseHash(window.location.hash));
@@ -369,13 +401,19 @@ function App() {
   // Έλεγχος ονόματος στον server (ίδια λίστα με αυτή που ελέγχει την κατάταξη)
   const checkName = useCallback((value) => {
     const n = String(value || "").trim();
+    setClaimError("");
+    setPinInput("");
     if (!n || n === TEST_NAME) {
       setNameBlocked(false);
       setNameError("");
+      setNameStatus("");
       return;
     }
-    fetchJson(`/api/scores?checkName=${encodeURIComponent(n)}`)
+    fetchJson(
+      `/api/scores?checkName=${encodeURIComponent(n)}&token=${encodeURIComponent(deviceToken())}`
+    )
       .then((d) => {
+        setNameStatus(d.status || "");
         setNameBlocked(!d.ok);
         setNameError(d.ok ? "" : "Αυτό το όνομα δεν επιτρέπεται. Γράψε το μικρό σου όνομα ή ένα ευγενικό παρατσούκλι.");
       })
@@ -386,6 +424,35 @@ function App() {
   useEffect(() => {
     checkName(readStorage(NAME_KEY, ""));
   }, [checkName]);
+  useEffect(() => writeStorage(PINS_KEY, pins), [pins]);
+
+  // «Είμαι εγώ»: συνδέει το όνομα με αυτή τη συσκευή με τον 4ψήφιο κωδικό
+  async function claimName() {
+    const n = name.trim();
+    const pin = pinInput.trim();
+    if (!/^\d{4}$/.test(pin)) {
+      setClaimError("Ο κωδικός έχει 4 ψηφία.");
+      return;
+    }
+    setClaiming(true);
+    setClaimError("");
+    try {
+      const r = await fetch("/api/scores", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "claim", name: n, token: deviceToken(), pin }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || "Δεν έγινε. Δοκίμασε ξανά.");
+      setPins((p) => ({ ...p, [normName(n)]: pin }));
+      setNameStatus("mine");
+      setPinInput("");
+    } catch (e) {
+      setClaimError(e.message);
+    } finally {
+      setClaiming(false);
+    }
+  }
   useEffect(() => writeStorage(SOUND_KEY, soundOn), [soundOn]);
   useEffect(() => writeStorage(TAB_KEY, tab), [tab]);
   useEffect(() => writeStorage(TIME_KEY, timeMode), [timeMode]);
@@ -605,6 +672,7 @@ function App() {
     setBoardLoading(true);
     setBoardError("");
     const player = nameBlocked || name.trim() === TEST_NAME ? "" : name.trim();
+    setNewPin("");
     const request = player
       ? fetch("/api/scores", {
           method: "POST",
@@ -612,6 +680,7 @@ function App() {
           body: JSON.stringify({
             key,
             name: player,
+            token: deviceToken(),
             points,
             correct: correctCount,
             total: questions.length,
@@ -626,9 +695,20 @@ function App() {
               return fetchBoard(key);
             }
           }
+          if (r.status === 409) {
+            const data = await r.json().catch(() => ({}));
+            setNameStatus("taken");
+            setBoardError(data.error || "Αυτό το όνομα το έχει ήδη άλλος παίκτης.");
+            return fetchBoard(key);
+          }
           if (!r.ok) throw new Error();
           const data = await r.json();
           setMyRank(data.rank || 0);
+          setNameStatus("mine");
+          if (data.pin) {
+            setPins((p) => ({ ...p, [normName(player)]: data.pin }));
+            setNewPin(data.pin);
+          }
           return data.scores || [];
         })
       : fetchBoard(key);
@@ -860,6 +940,12 @@ function App() {
             {subject.name} · {modeLabel(subject, route.mode)} · {subject.grade}
           </p>
           {myRank > 0 && <p className="rank">Είσαι στη θέση #{myRank} της κατάταξης!</p>}
+          {newPin && (
+            <p className="pin-note" role="status">
+              🔑 Το όνομα «{name.trim()}» είναι πλέον δικό σου. Ο κωδικός σου είναι{" "}
+              <b>{newPin}</b> — κράτα τον, για να παίζεις με το ίδιο όνομα και από άλλη συσκευή.
+            </p>
+          )}
           {!name.trim() && (
             <p className="muted">Γράψε όνομα στην αρχική για να μπαίνεις στην κατάταξη.</p>
           )}
@@ -1130,6 +1216,8 @@ function App() {
           aria-invalid={nameBlocked}
           onChange={(e) => {
             setName(e.target.value);
+            setNameStatus("");
+            setClaimError("");
             if (nameBlocked) {
               setNameBlocked(false);
               setNameError("");
@@ -1141,6 +1229,43 @@ function App() {
           <p className="field-error" id="player-error" role="alert">
             {nameError}
           </p>
+        )}
+        {nameStatus === "taken" && (
+          <div className="name-taken" role="alert">
+            <p>
+              Το όνομα «{name.trim()}» το έχει ήδη κάποιος. <b>Αν είσαι εσύ</b>, γράψε τον
+              4ψήφιο κωδικό σου. Αλλιώς διάλεξε άλλο όνομα (π.χ. με το αρχικό του επωνύμου).
+            </p>
+            <form
+              className="pin-row"
+              onSubmit={(e) => {
+                e.preventDefault();
+                claimName();
+              }}
+            >
+              <label className="sr-only" htmlFor="pin">
+                Κωδικός ονόματος
+              </label>
+              <input
+                id="pin"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={4}
+                placeholder="1234"
+                value={pinInput}
+                onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ""))}
+              />
+              <button className="primary" type="submit" disabled={claiming}>
+                {claiming ? "Έλεγχος…" : "Είμαι εγώ"}
+              </button>
+            </form>
+            {claimError && <p className="field-error">{claimError}</p>}
+          </div>
+        )}
+        {nameStatus === "mine" && pins[normName(name)] && (
+          <small className="muted">
+            🔑 Ο κωδικός του ονόματός σου: <b>{pins[normName(name)]}</b> (για άλλη συσκευή)
+          </small>
         )}
         <small className="muted" id="player-help">
           Αν το αφήσεις κενό, παίζεις κανονικά αλλά δεν μπαίνεις στην κατάταξη. Γράψε μόνο μικρό
