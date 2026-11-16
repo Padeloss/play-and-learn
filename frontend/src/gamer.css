@@ -481,3 +481,22 @@ h1,
   padding: 10px 12px;
   background: rgba(0, 255, 140, 0.08);
 }
+
+/* Διαγώνισμα με επιλογή κεφαλαίων */
+.pick-panel summary { cursor: pointer; font-weight: 700; min-height: 44px; display: flex; align-items: center; gap: 6px; }
+.pick-tools { display: flex; gap: 16px; margin: 6px 0; }
+.pick-unit { border: 0; padding: 0; margin: 10px 0 0; }
+.pick-unit legend { font-weight: 700; color: var(--cyan); margin-bottom: 4px; }
+.pick-item { display: flex; gap: 10px; align-items: flex-start; min-height: 44px; padding: 6px 0; cursor: pointer; }
+.pick-item input { width: 22px; height: 22px; flex: none; margin-top: 2px; accent-color: var(--violet); }
+.pick-panel .primary { margin-top: 10px; width: 100%; }
+.sos-badge, .sos-mini {
+  display: inline-block;
+  background: var(--red);
+  color: #fff;
+  font-weight: 800;
+  border-radius: 6px;
+  letter-spacing: 0.05em;
+}
+.sos-badge { padding: 2px 10px; margin-bottom: 6px; }
+.sos-mini { font-size: 0.75rem; padding: 0 6px; margin-left: 6px; }

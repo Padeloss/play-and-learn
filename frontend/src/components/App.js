@@ -57,6 +57,7 @@ const TIME_KEY = "playandlearn-time";
 const TEST_NAME = "*5";
 const DEVICE_KEY = "playandlearn-device"; // τυχαίο αναγνωριστικό αυτής της συσκευής (για τα ονόματα)
 const PINS_KEY = "playandlearn-pins"; // οι κωδικοί των ονομάτων που έχει αυτή η συσκευή
+const PICKS_KEY = "playandlearn-picks"; // επιλεγμένα κεφάλαια ανά μάθημα (για το διαγώνισμα)
 
 // Ίδιο όνομα με άλλη γραφή (κεφαλαία, τόνοι, τελικό σ) = ίδιο όνομα (όπως και στον server)
 function normName(n) {
@@ -104,7 +105,7 @@ function prepareQuestions(raw) {
       text: cleanChoice(c),
       correct: i === correctIndex,
     }));
-    return { question: q.question, choices: shuffle(choices) };
+    return { question: q.question, choices: shuffle(choices), sos: Boolean(q.sos) };
   });
 }
 
@@ -138,6 +139,17 @@ function iconOf(subject) {
   return ICONS[subject.name] || "📘";
 }
 
+// Διαγώνισμα/επανάληψη με επιλεγμένα κεφάλαια: mode = "<exam|all>:<id>,<id>,…" και προαιρετικά ":sos"
+function parseSel(mode) {
+  const parts = String(mode || "").split(":");
+  if (parts.length < 2) return null;
+  return { base: parts[0], ids: parts[1].split(",").filter(Boolean), sos: parts[2] === "sos" };
+}
+
+function selMode(base, ids, sos) {
+  return `${base}:${ids.join(",")}${sos ? ":sos" : ""}`;
+}
+
 function chapterOf(subject, mode) {
   if (!mode || mode[0] !== "c") return null;
   return subject.chapters.find((c) => `c${c.id}` === mode) || null;
@@ -145,11 +157,25 @@ function chapterOf(subject, mode) {
 
 function isValidMode(subject, mode) {
   if (mode === subject.reviewMode) return true;
+  const sel = parseSel(mode);
+  if (sel) {
+    return (
+      sel.base === subject.reviewMode &&
+      sel.ids.length > 0 &&
+      sel.ids.every((id) => subject.chapters.some((c) => c.id === id))
+    );
+  }
   if (LEVELS[mode]) return subject.levels.some((l) => l.level === mode);
   return Boolean(chapterOf(subject, mode));
 }
 
 function modeLabel(subject, mode) {
+  const sel = parseSel(mode);
+  if (sel) {
+    const nums = sel.ids.map((id) => (subject.chapters.find((c) => c.id === id) || {}).num);
+    const list = nums.length > 6 ? `${nums.slice(0, 6).join(", ")}… (${nums.length})` : nums.join(", ");
+    return `${sel.base === "exam" ? subject.examTitle : "Επανάληψη"} · Κεφ. ${list}${sel.sos ? " · μόνο SOS" : ""}`;
+  }
   if (mode === "exam") return subject.examTitle;
   if (mode === "all") return "Επανάληψη όλης της ύλης";
   if (LEVELS[mode]) return LEVELS[mode].label;
@@ -158,6 +184,8 @@ function modeLabel(subject, mode) {
 }
 
 function modeEmoji(mode) {
+  const sel = parseSel(mode);
+  if (sel) return modeEmoji(sel.base);
   if (mode === "exam") return "📝";
   if (mode === "all") return "📚";
   if (LEVELS[mode]) return LEVELS[mode].emoji;
@@ -325,6 +353,9 @@ function App() {
   const [claimError, setClaimError] = useState("");
   const [claiming, setClaiming] = useState(false);
   const [newPin, setNewPin] = useState(""); // κωδικός που μόλις δόθηκε (οθόνη αποτελέσματος)
+  // επιλεγμένα κεφάλαια για διαγώνισμα/επανάληψη, ανά μάθημα: { <κλειδί μαθήματος>: [ids] }
+  const [picks, setPicks] = useState(() => readStorage(PICKS_KEY, {}));
+  const [sosOnly, setSosOnly] = useState(false);
 
   // ποια οθόνη δείχνουμε — διαβάζεται από τη διεύθυνση
   const [route, setRoute] = useState(() => parseHash(window.location.hash));
@@ -366,7 +397,8 @@ function App() {
   );
 
   const subject = route.screen === "home" || route.screen === "admin" ? null : findSubject(route.key);
-  const isExam = route.mode === "exam";
+  const routeSel = parseSel(route.mode);
+  const isExam = route.mode === "exam" || Boolean(routeSel && routeSel.base === "exam");
   const baseSeconds = isExam ? SECONDS_PER_EXAM_QUESTION : SECONDS_PER_QUESTION;
   const limitSeconds = baseSeconds * TIME_OPTIONS[timeMode].factor;
   const quizReady =
@@ -425,6 +457,7 @@ function App() {
     checkName(readStorage(NAME_KEY, ""));
   }, [checkName]);
   useEffect(() => writeStorage(PINS_KEY, pins), [pins]);
+  useEffect(() => writeStorage(PICKS_KEY, picks), [picks]);
 
   // «Είμαι εγώ»: συνδέει το όνομα με αυτή τη συσκευή με τον 4ψήφιο κωδικό
   async function claimName() {
@@ -541,6 +574,23 @@ function App() {
     if (LEVELS[m]) return prepareQuestions(await fetchJson(`/lessons/${subj.id}/${m}.json`));
     const ch = chapterOf(subj, m);
     if (ch) return prepareQuestions(await fetchJson(`/lessons/${subj.id}/chapters/${ch.id}.json`));
+    const sel = parseSel(m);
+    if (sel) {
+      const lists = await Promise.all(
+        sel.ids.map((id) => fetchJson(`/lessons/${subj.id}/chapters/${id}.json`))
+      );
+      // ισομοιρασμένα από κάθε κεφάλαιο (μία από το καθένα με τη σειρά), ώστε να μη «χάνεται» κανένα
+      const decks = lists
+        .map((l) => shuffle(sel.sos ? l.filter((q) => q.sos) : l))
+        .filter((l) => l.length > 0);
+      const picked = [];
+      for (let i = 0; picked.length < REVIEW_QUESTIONS && decks.some((d) => i < d.length); i++) {
+        decks.forEach((d) => {
+          if (i < d.length && picked.length < REVIEW_QUESTIONS) picked.push(d[i]);
+        });
+      }
+      return prepareQuestions(picked);
+    }
     // Επανάληψη / Διαγώνισμα: ερωτήσεις από όλη την ύλη
     const files = [
       ...subj.chapters.map((c) => `/lessons/${subj.id}/chapters/${c.id}.json`),
@@ -668,6 +718,15 @@ function App() {
     setFinished(true);
     playSound("finish", subject.sound, soundOn);
     window.scrollTo(0, 0);
+
+    // Επιλεγμένα κεφάλαια: δεν υπάρχει κοινή κατάταξη (κάθε παιδί διαλέγει άλλα κεφάλαια)
+    if (parseSel(route.mode)) {
+      setBoard(null);
+      setBoardLoading(false);
+      setBoardError("");
+      setNewPin("");
+      return;
+    }
 
     setBoardLoading(true);
     setBoardError("");
@@ -946,7 +1005,10 @@ function App() {
               <b>{newPin}</b> — κράτα τον, για να παίζεις με το ίδιο όνομα και από άλλη συσκευή.
             </p>
           )}
-          {!name.trim() && (
+          {routeSel && (
+            <p className="muted">Με επιλεγμένα κεφάλαια το σκορ δεν μπαίνει στην κατάταξη.</p>
+          )}
+          {!routeSel && !name.trim() && (
             <p className="muted">Γράψε όνομα στην αρχική για να μπαίνεις στην κατάταξη.</p>
           )}
           {name.trim() === TEST_NAME && (
@@ -999,10 +1061,14 @@ function App() {
           </div>
         )}
 
-        <h2 className="board-title">Κατάταξη — top 10</h2>
-        <div className="panel">
-          <Leaderboard scores={board} loading={boardLoading} error={boardError} highlight={myRank} />
-        </div>
+        {!routeSel && (
+          <>
+            <h2 className="board-title">Κατάταξη — top 10</h2>
+            <div className="panel">
+              <Leaderboard scores={board} loading={boardLoading} error={boardError} highlight={myRank} />
+            </div>
+          </>
+        )}
       </>
     );
   }
@@ -1055,6 +1121,11 @@ function App() {
           </span>
         </div>
 
+        {q.sos && (
+          <span className="sos-badge" title="Ερώτηση που έχει πέσει σε εξετάσεις">
+            SOS
+          </span>
+        )}
         <h1 className="question" key={current} ref={questionHeading} tabIndex={-1}>
           {q.question}
         </h1>
@@ -1139,6 +1210,73 @@ function App() {
             {bestText(s, review)}
           </small>
         </button>
+
+        {s.chapters.length > 1 && (() => {
+          const chosen = (picks[s.key] || []).filter((id) => s.chapters.some((c) => c.id === id));
+          const toggle = (id) =>
+            setPicks((p) => {
+              const cur = (p[s.key] || []).filter((x) => x !== id);
+              return { ...p, [s.key]: cur.length === (p[s.key] || []).length ? [...cur, id] : cur };
+            });
+          const setAll = (ids) => setPicks((p) => ({ ...p, [s.key]: ids }));
+          const sosCount = s.chapters
+            .filter((c) => chosen.includes(c.id))
+            .reduce((n, c) => n + (c.sos || 0), 0);
+          const ordered = s.chapters.filter((c) => chosen.includes(c.id)).map((c) => c.id);
+          return (
+            <details className="panel pick-panel" open={chosen.length > 0}>
+              <summary>
+                <Icon>🎯</Icon> {review === "exam" ? "Διαγώνισμα" : "Επανάληψη"} μόνο από τα κεφάλαια
+                που θέλεις
+              </summary>
+              <p className="muted">
+                Διάλεξε τα κεφάλαια που έχετε διδαχτεί (ή όσα θα γράψεις). Οι ερωτήσεις μοιράζονται
+                ισόποσα ανάμεσά τους.
+              </p>
+              <div className="pick-tools">
+                <button className="link" onClick={() => setAll(s.chapters.map((c) => c.id))}>
+                  Όλα
+                </button>
+                <button className="link" onClick={() => setAll([])}>
+                  Κανένα
+                </button>
+              </div>
+              {units.map((u, ui) => (
+                <fieldset key={ui} className="pick-unit">
+                  {u.unit && <legend>{u.unit}</legend>}
+                  {u.items.map((c) => (
+                    <label key={c.id} className="pick-item">
+                      <input
+                        type="checkbox"
+                        checked={chosen.includes(c.id)}
+                        onChange={() => toggle(c.id)}
+                      />
+                      <span>
+                        <b>{c.num}.</b> {c.title}
+                        {c.sos > 0 && <span className="sos-mini">SOS {c.sos}</span>}
+                      </span>
+                    </label>
+                  ))}
+                </fieldset>
+              ))}
+              {sosCount > 0 && (
+                <label className="pick-item">
+                  <input type="checkbox" checked={sosOnly} onChange={(e) => setSosOnly(e.target.checked)} />
+                  <span>Μόνο ερωτήσεις SOS ({sosCount})</span>
+                </label>
+              )}
+              <button
+                className="primary"
+                disabled={chosen.length === 0}
+                onClick={() => play(selMode(review, ordered, sosOnly && sosCount > 0))}
+              >
+                {chosen.length === 0
+                  ? "Διάλεξε τουλάχιστον ένα κεφάλαιο"
+                  : `Ξεκίνα (${chosen.length} ${chosen.length === 1 ? "κεφάλαιο" : "κεφάλαια"})`}
+              </button>
+            </details>
+          );
+        })()}
 
         {units.map((u, ui) => (
           <section key={ui} aria-label={u.unit || "Κεφάλαια"}>

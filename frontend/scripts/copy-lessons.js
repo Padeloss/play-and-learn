@@ -108,6 +108,7 @@ const index = grades.map((g) => {
           title: nfc(ch.title),
           unit: ch.unit ? nfc(ch.unit) : undefined,
           count: questions.length,
+          sos: questions.filter((q) => q.sos === true).length || undefined, // ερωτήσεις που έχουν πέσει σε εξετάσεις
         });
         totalQuestions += questions.length;
       }
