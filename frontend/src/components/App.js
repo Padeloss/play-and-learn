@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import "../index.css";
 import { playSound } from "../sounds";
 import AdminPage from "./AdminPage";
+import ReportButton from "./ReportButton";
 
 // Τρόποι παιχνιδιού ("mode"):
 //   easy | medium | hard  -> ερωτήσεις μιας δυσκολίας (μαθήματα χωρίς κεφάλαια)
@@ -1172,6 +1173,15 @@ function App() {
             </button>
           )}
         </div>
+
+        <ReportButton
+          key={current}
+          subject={subject.name}
+          mode={modeLabel(subject, route.mode)}
+          question={q.question}
+          correct={correctText}
+          token={deviceToken()}
+        />
       </>
     );
   }

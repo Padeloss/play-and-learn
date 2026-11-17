@@ -34,6 +34,7 @@ function AdminPage({ describeKey, onBack }) {
   const [message, setMessage] = useState("");
   const [players, setPlayers] = useState([]);
   const [confirmPlayer, setConfirmPlayer] = useState("");
+  const [reports, setReports] = useState([]);
 
   async function load(k = code) {
     setLoading(true);
@@ -47,6 +48,12 @@ function AdminPage({ describeKey, onBack }) {
       saveKey(k);
       setScores(data.scores || []);
       setPlayers(data.players || []);
+      try {
+        const rr = await fetch("/api/reports?admin=1", { headers: { "x-admin-key": k } });
+        if (rr.ok) setReports((await rr.json()).reports || []);
+      } catch {
+        /* οι αναφορές δεν είναι απαραίτητες για τα σκορ */
+      }
     } catch (e) {
       setScores(null);
       setError(e.message);
@@ -69,6 +76,22 @@ function AdminPage({ describeKey, onBack }) {
       setMessage(`Σβήστηκε: «${s.name}» (${s.points} π.)`);
     } catch {
       setError("Δεν σβήστηκε. Δοκίμασε ξανά.");
+    }
+  }
+
+  async function dismissReport(r) {
+    setError("");
+    try {
+      const resp = await fetch("/api/reports", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", "x-admin-key": code },
+        body: JSON.stringify({ question: r.question }),
+      });
+      if (!resp.ok) throw new Error();
+      setReports((list) => list.filter((x) => x !== r));
+      setMessage("Η αναφορά διαγράφηκε (η ερώτηση διορθώνεται στο repo).");
+    } catch {
+      setError("Δεν διαγράφηκε. Δοκίμασε ξανά.");
     }
   }
 
@@ -177,6 +200,36 @@ function AdminPage({ describeKey, onBack }) {
                       Σβήσε
                     </button>
                   )}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <h2>Αναφορές λάθους ({reports.length})</h2>
+          <p className="muted">
+            Ερωτήσεις που οι παίκτες θεωρούν λάθος (πρώτες αυτές με τις περισσότερες αναφορές). Μετά τη
+            διόρθωση πάτα «Διαγραφή».
+          </p>
+          <div className="panel">
+            {reports.length === 0 && <p className="muted">Καμία αναφορά.</p>}
+            <ul className="admin-list">
+              {reports.map((r) => (
+                <li key={`${r.subject}|${r.question}`} className="report-item">
+                  <div className="admin-info">
+                    <b>{r.question}</b>
+                    <small className="muted">
+                      {r.subject} · {r.mode} · σωστή απάντηση: {r.correct} · {r.count}{" "}
+                      {r.count === 1 ? "αναφορά" : "αναφορές"}
+                    </small>
+                    {r.notes.map((n, i) => (
+                      <small key={i} className="muted">
+                        «{n}»
+                      </small>
+                    ))}
+                  </div>
+                  <button className="secondary" onClick={() => dismissReport(r)}>
+                    Διαγραφή
+                  </button>
                 </li>
               ))}
             </ul>
