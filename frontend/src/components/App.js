@@ -1175,7 +1175,7 @@ function App() {
         </div>
 
         <ReportButton
-          key={current}
+          key={`report-${current}`}
           subject={subject.name}
           mode={modeLabel(subject, route.mode)}
           question={q.question}
