@@ -1,0 +1,52 @@
+[
+  {
+    "question": "Ποιος τύπος δίνει την πυκνότητα;",
+    "choices": [
+      "1. ρ = V / m",
+      "2. ρ = m · V",
+      "3. ρ = m + V",
+      "4. ρ = m / V"
+    ],
+    "answer": "4"
+  },
+  {
+    "question": "Πόσα γραμμάρια ζάχαρης περιέχονται σε 300 g διαλύματος 10% w/w;",
+    "choices": [
+      "1. 10 g",
+      "2. 3 g",
+      "3. 300 g",
+      "4. 30 g"
+    ],
+    "answer": "4"
+  },
+  {
+    "question": "Ποια αντίδραση είναι εξουδετέρωση;",
+    "choices": [
+      "1. Zn + 2HCl → ZnCl₂ + H₂",
+      "2. 2H₂ + O₂ → 2H₂O",
+      "3. HCl + NaOH → NaCl + H₂O",
+      "4. CaCO₃ → CaO + CO₂"
+    ],
+    "answer": "3"
+  },
+  {
+    "question": "Ποια αντίδραση είναι απλή αντικατάσταση;",
+    "choices": [
+      "1. HCl + NaOH → NaCl + H₂O",
+      "2. Zn + 2HCl → ZnCl₂ + H₂",
+      "3. AgNO₃ + NaCl → AgCl + NaNO₃",
+      "4. 2H₂ + O₂ → 2H₂O"
+    ],
+    "answer": "2"
+  },
+  {
+    "question": "Ποιο ίζημα σχηματίζεται στην αντίδραση AgNO₃ με NaCl;",
+    "choices": [
+      "1. AgCl",
+      "2. NaNO₃",
+      "3. NaCl",
+      "4. Ag₂O"
+    ],
+    "answer": "1"
+  }
+]
