@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import "../index.css";
-import { playSound } from "../sounds";
+import { playSound, setVolume } from "../sounds";
 import AdminPage from "./AdminPage";
 import ReportButton from "./ReportButton";
 
@@ -57,6 +57,10 @@ const TIME_KEY = "playandlearn-time";
 // Όνομα για δοκιμές: παίζεις κανονικά, αλλά το σκορ ΔΕΝ μπαίνει στην κατάταξη
 const TEST_NAME = "*5";
 const DEVICE_KEY = "playandlearn-device"; // τυχαίο αναγνωριστικό αυτής της συσκευής (για τα ονόματα)
+const PROGRESS_KEY = "playandlearn-progress"; // καλύτερο ποσοστό σωστών ανά κεφάλαιο/τρόπο (για τα αστεράκια)
+const MISTAKES_KEY = "playandlearn-mistakes"; // «Τα λάθη μου»: ερωτήσεις που χάθηκαν, ανά μάθημα
+const VOLUME_KEY = "playandlearn-volume";
+const MAX_MISTAKES = 200; // ανά μάθημα
 const PINS_KEY = "playandlearn-pins"; // οι κωδικοί των ονομάτων που έχει αυτή η συσκευή
 const PICKS_KEY = "playandlearn-picks"; // επιλεγμένα κεφάλαια ανά μάθημα (για το διαγώνισμα)
 
@@ -106,7 +110,7 @@ function prepareQuestions(raw) {
       text: cleanChoice(c),
       correct: i === correctIndex,
     }));
-    return { question: q.question, choices: shuffle(choices), sos: Boolean(q.sos) };
+    return { question: q.question, choices: shuffle(choices), sos: Boolean(q.sos), why: q.why || "" };
   });
 }
 
@@ -157,7 +161,7 @@ function chapterOf(subject, mode) {
 }
 
 function isValidMode(subject, mode) {
-  if (mode === subject.reviewMode) return true;
+  if (mode === subject.reviewMode || mode === "mistakes") return true;
   const sel = parseSel(mode);
   if (sel) {
     return (
@@ -178,6 +182,7 @@ function modeLabel(subject, mode) {
     return `${sel.base === "exam" ? subject.examTitle : "Επανάληψη"} · Κεφ. ${list}${sel.sos ? " · μόνο SOS" : ""}`;
   }
   if (mode === "exam") return subject.examTitle;
+  if (mode === "mistakes") return "Τα λάθη μου";
   if (mode === "all") return "Επανάληψη όλης της ύλης";
   if (LEVELS[mode]) return LEVELS[mode].label;
   const ch = chapterOf(subject, mode);
@@ -188,6 +193,7 @@ function modeEmoji(mode) {
   const sel = parseSel(mode);
   if (sel) return modeEmoji(sel.base);
   if (mode === "exam") return "📝";
+  if (mode === "mistakes") return "🔁";
   if (mode === "all") return "📚";
   if (LEVELS[mode]) return LEVELS[mode].emoji;
   return "📖";
@@ -204,6 +210,23 @@ function modesOf(subject) {
 
 function boardKey(subject, mode) {
   return `${subject.key}-${mode}`;
+}
+
+// Αστεράκια από το καλύτερο ποσοστό σωστών: 50% = 1, 80% = 2, 100% = 3
+function starsOf(percent) {
+  if (percent === undefined) return 0;
+  return percent >= 100 ? 3 : percent >= 80 ? 2 : percent >= 50 ? 1 : 0;
+}
+
+function Stars({ percent }) {
+  if (percent === undefined) return null;
+  const n = starsOf(percent);
+  return (
+    <span className="stars" aria-label={`${n} από 3 αστέρια (καλύτερο ${percent}%)`} title={`Καλύτερο: ${percent}%`}>
+      {"★".repeat(n)}
+      <span className="stars-off">{"★".repeat(3 - n)}</span>
+    </span>
+  );
 }
 
 // Βαθμός στα 20, με ένα δεκαδικό (π.χ. 17,5)
@@ -345,6 +368,10 @@ function App() {
     return TIME_OPTIONS[t] ? t : "normal";
   });
   const [best, setBest] = useState(() => readStorage(BEST_KEY, {}));
+  const [progress, setProgress] = useState(() => readStorage(PROGRESS_KEY, {}));
+  const [mistakeBank, setMistakeBank] = useState(() => readStorage(MISTAKES_KEY, {}));
+  const [volume, setVolumeState] = useState(() => readStorage(VOLUME_KEY, 0.8));
+  const [installEvent, setInstallEvent] = useState(null);
   const [nameBlocked, setNameBlocked] = useState(false); // το όνομα δεν επιτρέπεται στην κατάταξη
   const [nameError, setNameError] = useState("");
   // κατάσταση ονόματος: "" (άγνωστη) | "free" | "mine" | "taken"
@@ -381,6 +408,7 @@ function App() {
   const [myRank, setMyRank] = useState(0);
 
   const questionStart = useRef(0);
+  const lastTick = useRef(0);
   const questionHeading = useRef(null);
   const nextButton = useRef(null);
 
@@ -458,6 +486,26 @@ function App() {
     checkName(readStorage(NAME_KEY, ""));
   }, [checkName]);
   useEffect(() => writeStorage(PINS_KEY, pins), [pins]);
+  useEffect(() => writeStorage(MISTAKES_KEY, mistakeBank), [mistakeBank]);
+  useEffect(() => {
+    writeStorage(VOLUME_KEY, volume);
+    setVolume(volume);
+  }, [volume]);
+
+  // «Βάλε το στο κινητό»: ο browser δίνει το παράθυρο εγκατάστασης (Android/Chrome/Edge)
+  useEffect(() => {
+    const onPrompt = (e) => {
+      e.preventDefault();
+      setInstallEvent(e);
+    };
+    const onInstalled = () => setInstallEvent(null);
+    window.addEventListener("beforeinstallprompt", onPrompt);
+    window.addEventListener("appinstalled", onInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onPrompt);
+      window.removeEventListener("appinstalled", onInstalled);
+    };
+  }, []);
   useEffect(() => writeStorage(PICKS_KEY, picks), [picks]);
 
   // «Είμαι εγώ»: συνδέει το όνομα με αυτή τη συσκευή με τον 4ψήφιο κωδικό
@@ -572,6 +620,13 @@ function App() {
   // ---------- Κουίζ ----------
 
   async function loadQuestions(subj, m) {
+    if (m === "mistakes") {
+      const bank = mistakeBank[subj.key] || [];
+      if (bank.length === 0) throw new Error("empty");
+      return shuffle(bank)
+        .slice(0, REVIEW_QUESTIONS)
+        .map((q) => ({ question: q.question, choices: shuffle(q.choices), sos: false, why: q.why || "" }));
+    }
     if (LEVELS[m]) return prepareQuestions(await fetchJson(`/lessons/${subj.id}/${m}.json`));
     const ch = chapterOf(subj, m);
     if (ch) return prepareQuestions(await fetchJson(`/lessons/${subj.id}/chapters/${ch.id}.json`));
@@ -603,6 +658,7 @@ function App() {
 
   function startQuestion() {
     questionStart.current = Date.now();
+    lastTick.current = 0;
     setTimeLeft(limitSeconds);
     setPicked(null);
     setLastGain(0);
@@ -638,7 +694,14 @@ function App() {
         setLastGain(0);
         window.scrollTo(0, 0);
       })
-      .catch(() => !cancelled && setQuizError("Δεν φορτώθηκαν οι ερωτήσεις. Έλεγξε τη σύνδεση και δοκίμασε ξανά."));
+      .catch((e) =>
+        !cancelled &&
+        setQuizError(
+          e && e.message === "empty"
+            ? "Δεν έχεις λάθη σε αυτό το μάθημα. Μπράβο!"
+            : "Δεν φορτώθηκαν οι ερωτήσεις. Έλεγξε τη σύνδεση και δοκίμασε ξανά."
+        )
+      );
     return () => {
       cancelled = true;
     };
@@ -668,9 +731,29 @@ function App() {
           question: q.question,
           chosen: index >= 0 ? q.choices[index].text : null,
           correct: q.choices.find((c) => c.correct).text,
+          why: q.why,
           ok: isCorrect,
         },
       ]);
+      // «Τα λάθη μου»: το λάθος μπαίνει στη λίστα, η σωστή απάντηση το βγάζει
+      if (subject) {
+        setMistakeBank((bank) => {
+          const list = (bank[subject.key] || []).filter((x) => x.question !== q.question);
+          if (!isCorrect) {
+            list.unshift({
+              question: q.question,
+              choices: q.choices.map((c) => ({ text: c.text, correct: c.correct })),
+              why: q.why || "",
+            });
+          }
+          return { ...bank, [subject.key]: list.slice(0, MAX_MISTAKES) };
+        });
+      }
+      let streakNow = 0;
+      if (isCorrect) {
+        streakNow = 1;
+        for (let i = history.length - 1; i >= 0 && history[i].ok; i--) streakNow++;
+      }
       if (isCorrect) {
         const elapsed = (Date.now() - questionStart.current) / 1000;
         const left = Math.max(0, baseSeconds - elapsed);
@@ -678,14 +761,15 @@ function App() {
         setCorrectCount((c) => c + 1);
         setPoints((p) => p + gain);
         setLastGain(gain);
-        playSound("correct", subject && subject.sound, soundOn);
+        const milestone = streakNow === 3 || (streakNow >= 5 && streakNow % 5 === 0);
+        playSound(milestone ? "streak" : "correct", subject && subject.sound, soundOn);
       } else {
         setLastGain(0);
         playSound("wrong", subject && subject.sound, soundOn);
       }
       setTimeout(() => nextButton.current && nextButton.current.focus(), 0);
     },
-    [picked, questions, current, soundOn, baseSeconds, subject]
+    [picked, questions, current, soundOn, baseSeconds, subject, history]
   );
 
   // Χρονόμετρο ερώτησης (δεν τρέχει με «Χωρίς όριο»)
@@ -695,10 +779,15 @@ function App() {
       const elapsed = (Date.now() - questionStart.current) / 1000;
       const left = Math.max(0, limitSeconds - elapsed);
       setTimeLeft(left);
+      const sec = Math.ceil(left);
+      if (sec <= 5 && sec >= 1 && sec !== lastTick.current) {
+        lastTick.current = sec;
+        playSound("tick", subject && subject.sound, soundOn);
+      }
       if (left <= 0) answer(-1);
     }, 100);
     return () => clearInterval(id);
-  }, [quizReady, finished, picked, current, answer, limitSeconds]);
+  }, [quizReady, finished, picked, current, answer, limitSeconds, subject, soundOn]);
 
   function next() {
     if (current + 1 < questions.length) {
@@ -716,12 +805,18 @@ function App() {
       setBest(updated);
       writeStorage(BEST_KEY, updated);
     }
+    const percent = Math.round((correctCount / questions.length) * 100);
+    if (route.mode !== "mistakes" && (progress[key] === undefined || percent > progress[key])) {
+      const updatedProgress = { ...progress, [key]: percent };
+      setProgress(updatedProgress);
+      writeStorage(PROGRESS_KEY, updatedProgress);
+    }
     setFinished(true);
     playSound("finish", subject.sound, soundOn);
     window.scrollTo(0, 0);
 
     // Επιλεγμένα κεφάλαια: δεν υπάρχει κοινή κατάταξη (κάθε παιδί διαλέγει άλλα κεφάλαια)
-    if (parseSel(route.mode)) {
+    if (parseSel(route.mode) || route.mode === "mistakes") {
       setBoard(null);
       setBoardLoading(false);
       setBoardError("");
@@ -975,6 +1070,8 @@ function App() {
         ? "Καλή προσπάθεια!"
         : "Συνέχισε την επανάληψη!";
     const mistakes = history.filter((h) => !h.ok);
+    const noBoard = Boolean(routeSel) || route.mode === "mistakes";
+    const bankCount = (mistakeBank[subject.key] || []).length;
     const ch = chapterOf(subject, route.mode);
     const nextChapter = ch ? subject.chapters[subject.chapters.indexOf(ch) + 1] : null;
     return page(
@@ -1006,10 +1103,19 @@ function App() {
               <b>{newPin}</b> — κράτα τον, για να παίζεις με το ίδιο όνομα και από άλλη συσκευή.
             </p>
           )}
-          {routeSel && (
-            <p className="muted">Με επιλεγμένα κεφάλαια το σκορ δεν μπαίνει στην κατάταξη.</p>
+          {route.mode !== "mistakes" && percent >= 50 && (
+            <p className="rank">
+              <Stars percent={percent} />
+            </p>
           )}
-          {!routeSel && !name.trim() && (
+          {noBoard && (
+            <p className="muted">
+              {route.mode === "mistakes"
+                ? "Η επανάληψη λαθών δεν μπαίνει στην κατάταξη. Όσα απάντησες σωστά βγήκαν από τη λίστα."
+                : "Με επιλεγμένα κεφάλαια το σκορ δεν μπαίνει στην κατάταξη."}
+            </p>
+          )}
+          {!noBoard && !name.trim() && (
             <p className="muted">Γράψε όνομα στην αρχική για να μπαίνεις στην κατάταξη.</p>
           )}
           {name.trim() === TEST_NAME && (
@@ -1034,6 +1140,14 @@ function App() {
             <button className={nextChapter ? "secondary" : "primary"} onClick={playAgain}>
               Ξανά
             </button>
+            {bankCount > 0 && route.mode !== "mistakes" && (
+              <button
+                className="secondary"
+                onClick={() => go({ screen: "play", key: subject.key, mode: "mistakes" }, { replace: true })}
+              >
+                🔁 Τα λάθη μου ({bankCount})
+              </button>
+            )}
             <button className="secondary" onClick={up}>
               Πίσω στο μάθημα
             </button>
@@ -1057,12 +1171,13 @@ function App() {
                 <div className="review-right">
                   <Icon>✅</Icon> <span className="sr-only">Σωστή απάντηση:</span> {m.correct}
                 </div>
+                {m.why && <div className="review-why">💡 {m.why}</div>}
               </div>
             ))}
           </div>
         )}
 
-        {!routeSel && (
+        {!noBoard && (
           <>
             <h2 className="board-title">Κατάταξη — top 10</h2>
             <div className="panel">
@@ -1174,6 +1289,12 @@ function App() {
           )}
         </div>
 
+        {picked !== null && q.why && (
+          <p className="why" role="note">
+            💡 <b>Γιατί;</b> {q.why}
+          </p>
+        )}
+
         <ReportButton
           key={`report-${current}`}
           subject={subject.name}
@@ -1198,6 +1319,10 @@ function App() {
       else units.push({ unit: c.unit || "", items: [c] });
     });
     const play = (m) => go({ screen: "play", key: s.key, mode: m });
+    const prog = (c) => progress[boardKey(s, `c${c.id}`)];
+    const doneCount = s.chapters.filter((c) => prog(c) !== undefined).length;
+    const nextUp = s.chapters.find((c) => starsOf(prog(c)) < 1);
+    const myMistakes = (mistakeBank[s.key] || []).length;
     return page(
       <>
         <button className="link back-link" onClick={up}>
@@ -1208,7 +1333,19 @@ function App() {
         </h1>
         <p className="muted grade-line">
           {s.grade} · {s.total} ερωτήσεις
+          {s.chapters.length > 0 && ` · παιγμένα κεφάλαια ${doneCount}/${s.chapters.length}`}
         </p>
+
+        {s.chapters.length > 0 && doneCount > 0 && nextUp && (
+          <button className="secondary continue-btn" onClick={() => play(`c${nextUp.id}`)}>
+            ▶ Συνέχισε: Κεφ. {nextUp.num} · {nextUp.title}
+          </button>
+        )}
+        {myMistakes > 0 && (
+          <button className="secondary continue-btn" onClick={() => play("mistakes")}>
+            🔁 Τα λάθη μου ({myMistakes}) — παίξ' τα ξανά
+          </button>
+        )}
 
         <button className="review-btn" onClick={() => play(review)}>
           <span className="review-btn-title">
@@ -1304,7 +1441,7 @@ function App() {
                       {c.title}
                     </span>
                     <small>
-                      {c.count} ερωτ.{bestText(s, `c${c.id}`)}
+                      {c.count} ερωτ.{bestText(s, `c${c.id}`)} <Stars percent={prog(c)} />
                     </small>
                   </span>
                 </button>
@@ -1419,6 +1556,42 @@ function App() {
           Αν το αφήσεις κενό, παίζεις κανονικά αλλά δεν μπαίνεις στην κατάταξη. Γράψε μόνο μικρό
           όνομα ή παρατσούκλι — φαίνεται σε όλους.
         </small>
+
+        <div className="volume-row">
+          <label htmlFor="volume">🔊 Ένταση ήχου</label>
+          <input
+            id="volume"
+            type="range"
+            min="0"
+            max="1"
+            step="0.1"
+            value={volume}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setVolumeState(v);
+              if (v > 0 && !soundOn) setSoundOn(true);
+            }}
+            onPointerUp={() => playSound("correct", group.subjects[0] && group.subjects[0].sound, soundOn)}
+          />
+        </div>
+
+        {installEvent && (
+          <button
+            className="secondary install-btn"
+            onClick={async () => {
+              installEvent.prompt();
+              await installEvent.userChoice.catch(() => null);
+              setInstallEvent(null);
+            }}
+          >
+            📲 Βάλε το Play and Learn στο κινητό σου
+          </button>
+        )}
+        {!installEvent && /iPhone|iPad/.test(navigator.userAgent) && !window.navigator.standalone && (
+          <small className="muted">
+            📲 Στο iPhone: πάτα «Κοινοποίηση» και μετά «Προσθήκη στην οθόνη Αφετηρίας», για να το έχεις σαν εφαρμογή.
+          </small>
+        )}
 
         <fieldset className="time-choice">
           <legend>Χρόνος ανά ερώτηση</legend>

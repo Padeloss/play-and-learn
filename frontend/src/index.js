@@ -10,3 +10,10 @@ root.render(
     <App />
   </React.StrictMode>
 );
+
+// Εγκατάσταση στο κινητό και λειτουργία χωρίς ίντερνετ (μόνο στο κανονικό site, όχι στη δοκιμή)
+if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}

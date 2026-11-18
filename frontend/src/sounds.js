@@ -5,7 +5,8 @@
 //   metal -> Γυμνάσιο: ηλεκτρική κιθάρα με παραμόρφωση (power chords)
 //   arcade -> Λύκειο (ΕΠΑΛ): synthwave / ηχητικά εφέ ρετρό ηλεκτρονικού παιχνιδιού
 //
-// Κάθε θέμα έχει τρεις ήχους: correct (σωστό), wrong (λάθος), finish (τέλος κουίζ).
+// Κάθε θέμα έχει: correct (σωστό), wrong (λάθος), finish (τέλος κουίζ), streak (σερί σωστών)
+// και tick (τελευταία 5 δευτερόλεπτα). Η ένταση ρυθμίζεται με setVolume().
 
 let ctx = null;
 
@@ -198,16 +199,58 @@ const arcade = {
   },
 };
 
+// ---------- Κοινοί ήχοι: σερί και «τικ» χρόνου ----------
+
+// Σερί σωστών (3, 5, 10…): η «σωστή» μελωδία του θέματος και από πάνω ένα λαμπερό αρπέγιο
+function streakFanfare(set) {
+  return (ac, out, t) => {
+    set.correct(ac, out, t);
+    [76, 79, 84, 88].forEach((n, i) => bell(ac, out, n, t + 0.18 + i * 0.07, 0.3, 0.16));
+  };
+}
+
+// «Τικ» για τα τελευταία 5 δευτερόλεπτα: κοντό, σιγανό
+function tick(ac, out, t) {
+  const osc = ac.createOscillator();
+  const gain = ac.createGain();
+  osc.type = "square";
+  osc.frequency.value = 1500;
+  gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.exponentialRampToValueAtTime(0.05, t + 0.004);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+  osc.connect(gain).connect(out);
+  osc.start(t);
+  osc.stop(t + 0.07);
+}
+
 const THEMES = { kids, metal, arcade };
+Object.values(THEMES).forEach((set) => {
+  if (!set.streak) set.streak = streakFanfare(set);
+  if (!set.tick) set.tick = tick;
+});
+
+// Ένταση 0–1 (ρυθμιστικό στην αρχική)
+let volume = 0.8;
+let master = null;
+
+export function setVolume(v) {
+  volume = Math.min(1, Math.max(0, Number(v) || 0));
+  if (master) master.gain.value = volume;
+}
 
 export function playSound(name, theme, enabled) {
-  if (!enabled) return;
+  if (!enabled || volume <= 0) return;
   try {
     const ac = audio();
     if (!ac) return;
+    if (!master) {
+      master = ac.createGain();
+      master.connect(ac.destination);
+    }
+    master.gain.value = volume;
     const set = THEMES[theme] || kids;
     if (!set[name]) return;
-    set[name](ac, ac.destination, ac.currentTime + 0.01);
+    set[name](ac, master, ac.currentTime + 0.01);
   } catch {
     /* ο browser δεν άφησε να παίξει ήχος — δεν πειράζει */
   }

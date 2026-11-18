@@ -827,3 +827,61 @@ h1 {
 .report-item {
   align-items: flex-start;
 }
+
+/* Αστεράκια προόδου ανά κεφάλαιο */
+.stars {
+  color: #fbbf24;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.stars-off {
+  opacity: 0.25;
+}
+
+.result .stars {
+  font-size: 2rem;
+}
+
+/* «Συνέχισε» και «Τα λάθη μου» στην οθόνη μαθήματος */
+.continue-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin-top: 10px;
+}
+
+/* «Γιατί;» μετά την απάντηση */
+.why {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.review-why {
+  margin-top: 4px;
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+
+/* Ένταση και εγκατάσταση */
+.volume-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.volume-row input[type="range"] {
+  flex: 1;
+  max-width: 260px;
+  min-height: 44px;
+}
+
+.install-btn {
+  margin-top: 12px;
+}
