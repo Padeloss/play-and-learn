@@ -1,6 +1,7 @@
 # Κοινός βοηθός για τις γεννήτριες κεφαλαίων.
 # Χρήση σε κάθε αρχείο: from common import Course; c = Course("Γ΄ Γυμνασίου/Μαθηματικά", "Γ΄ Γυμνασίου", "πηγή");
-# c.ch(id, num, unit, title, [(ερώτηση, σωστή, λάθος1, λάθος2, λάθος3), ...]); c.write(ROOT)
+# c.ch(id, num, unit, title, [(ερώτηση, σωστή, λάθος1, λάθος2, λάθος3[, εξήγηση]), ...]); c.write(ROOT)
+# Με write(clean=True) σβήνονται τα παλιά αρχεία κεφαλαίων που δεν υπάρχουν πια.
 import json, os, random, sys, glob
 
 class Course:
@@ -8,14 +9,20 @@ class Course:
         self.path, self.grade, self.source, self.CH = path, grade, source, []
     def ch(self, cid, num, unit, title, qs):
         self.CH.append((cid, num, unit, title, qs))
-    def write(self, root="backend/lessons"):
+    def write(self, root="backend/lessons", clean=False):
         out_dir = os.path.join(root, self.path)
+        if clean:
+            keep = {f"{c[0]}.json" for c in self.CH}
+            for f in glob.glob(os.path.join(out_dir, "chapters", "*.json")):
+                if os.path.basename(f) not in keep:
+                    os.remove(f)
         os.makedirs(os.path.join(out_dir, "chapters"), exist_ok=True)
         seen, total, meta = set(), 0, []
         for cid, num, unit, title, qs in self.CH:
             rng = random.Random("c-" + self.path + cid)
             out = []
             for question, right, *wrong in qs:
+                why = wrong.pop() if len(wrong) == 4 else None  # προαιρετική εξήγηση «Γιατί;»
                 assert len(wrong) == 3 and len(set([right] + wrong)) == 4, (self.path, question)
                 assert question not in seen, (self.path, question)
                 seen.add(question)
@@ -24,6 +31,8 @@ class Course:
                 out.append({"question": question,
                             "choices": [f"{i+1}. {c}" for i, c in enumerate(choices)],
                             "answer": str(choices.index(right) + 1)})
+                if why:
+                    out[-1]["why"] = why
             total += len(out)
             with open(os.path.join(out_dir, "chapters", f"{cid}.json"), "w", encoding="utf8") as f:
                 json.dump(out, f, ensure_ascii=False, indent=2); f.write("\n")
