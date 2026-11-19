@@ -882,6 +882,62 @@ h1 {
   min-height: 44px;
 }
 
-.install-btn {
+.home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-top: 12px;
+}
+.bookmark-help {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.bookmark-help p {
+  margin: 0 0 8px;
+}
+.score-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+.score-summary > div {
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  text-align: center;
+}
+.score-summary b {
+  display: block;
+  font-size: 1.5rem;
+}
+.scores-subject {
+  margin-bottom: 12px;
+}
+.scores-subject-title {
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  padding: 0 0 8px;
+  cursor: pointer;
+}
+.scores-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+.scores-table th,
+.scores-table td {
+  text-align: left;
+  padding: 6px 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  vertical-align: top;
+}
+.scores-table td:nth-child(2),
+.scores-table td:nth-child(3) {
+  white-space: nowrap;
 }

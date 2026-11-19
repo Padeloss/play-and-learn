@@ -255,6 +255,7 @@ function parseHash(hash) {
     .filter(Boolean)
     .map((p) => decodeURIComponent(p));
   if (parts[0] === "admin") return { screen: "admin" };
+  if (parts[0] === "scores") return { screen: "scores" };
   if (parts[0] !== "m" || !parts[1]) return { screen: "home" };
   const key = parts[1];
   if ((parts[2] === "play" || parts[2] === "board") && parts[3]) {
@@ -266,6 +267,7 @@ function parseHash(hash) {
 function hashOf(route) {
   if (route.screen === "home") return "#/";
   if (route.screen === "admin") return "#/admin";
+  if (route.screen === "scores") return "#/scores";
   if (route.screen === "subject") return `#/m/${route.key}`;
   return `#/m/${route.key}/${route.screen}/${route.mode}`;
 }
@@ -371,7 +373,8 @@ function App() {
   const [progress, setProgress] = useState(() => readStorage(PROGRESS_KEY, {}));
   const [mistakeBank, setMistakeBank] = useState(() => readStorage(MISTAKES_KEY, {}));
   const [volume, setVolumeState] = useState(() => readStorage(VOLUME_KEY, 0.8));
-  const [installEvent, setInstallEvent] = useState(null);
+  const [bookmarkHelp, setBookmarkHelp] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [nameBlocked, setNameBlocked] = useState(false); // το όνομα δεν επιτρέπεται στην κατάταξη
   const [nameError, setNameError] = useState("");
   // κατάσταση ονόματος: "" (άγνωστη) | "free" | "mine" | "taken"
@@ -425,7 +428,8 @@ function App() {
     [groups]
   );
 
-  const subject = route.screen === "home" || route.screen === "admin" ? null : findSubject(route.key);
+  const subject =
+    route.screen === "home" || route.screen === "admin" || route.screen === "scores" ? null : findSubject(route.key);
   const routeSel = parseSel(route.mode);
   const isExam = route.mode === "exam" || Boolean(routeSel && routeSel.base === "exam");
   const baseSeconds = isExam ? SECONDS_PER_EXAM_QUESTION : SECONDS_PER_QUESTION;
@@ -492,20 +496,18 @@ function App() {
     setVolume(volume);
   }, [volume]);
 
-  // «Βάλε το στο κινητό»: ο browser δίνει το παράθυρο εγκατάστασης (Android/Chrome/Edge)
-  useEffect(() => {
-    const onPrompt = (e) => {
-      e.preventDefault();
-      setInstallEvent(e);
-    };
-    const onInstalled = () => setInstallEvent(null);
-    window.addEventListener("beforeinstallprompt", onPrompt);
-    window.addEventListener("appinstalled", onInstalled);
-    return () => {
-      window.removeEventListener("beforeinstallprompt", onPrompt);
-      window.removeEventListener("appinstalled", onInstalled);
-    };
-  }, []);
+  // Σελιδοδείκτης: οι browsers δεν επιτρέπουν σε μια σελίδα να βάλει μόνη της σελιδοδείκτη,
+  // οπότε δείχνουμε οδηγίες για τη συσκευή του παιδιού και κουμπί αντιγραφής του συνδέσμου.
+  async function copyLink() {
+    const url = window.location.origin + "/";
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2500);
+    } catch {
+      window.prompt("Αντίγραψε τον σύνδεσμο:", url);
+    }
+  }
   useEffect(() => writeStorage(PICKS_KEY, picks), [picks]);
 
   // «Είμαι εγώ»: συνδέει το όνομα με αυτή τη συσκευή με τον 4ψήφιο κωδικό
@@ -956,6 +958,103 @@ function App() {
 
   if (!groups) {
     return page(<p className="muted">Φόρτωση…</p>);
+  }
+
+  // Όλα τα σκορ του παίκτη (από αυτή τη συσκευή)
+  if (route.screen === "scores") {
+    const rows = groups
+      .map((g) => ({
+        title: g.title,
+        icon: g.icon,
+        subjects: g.subjects
+          .map((s) => ({
+            s,
+            items: [...modesOf(s), "mistakes"]
+              .map((m) => ({ m, pts: best[boardKey(s, m)], pct: progress[boardKey(s, m)] }))
+              .filter((x) => x.pts !== undefined || x.pct !== undefined),
+          }))
+          .filter((x) => x.items.length > 0),
+      }))
+      .filter((g) => g.subjects.length > 0);
+    const all = rows.flatMap((g) => g.subjects.flatMap((x) => x.items));
+    const totalPts = all.reduce((n, x) => n + (x.pts || 0), 0);
+    const totalStars = all.reduce((n, x) => n + starsOf(x.pct), 0);
+    const perfect = all.filter((x) => x.pct === 100).length;
+    return page(
+      <>
+        <button className="link back-link" onClick={up}>
+          ← Αρχική
+        </button>
+        <h1>🏆 Τα σκορ μου{name.trim() ? ` — ${name.trim()}` : ""}</h1>
+        {all.length === 0 ? (
+          <p className="muted">Δεν έχεις παίξει ακόμα. Διάλεξε ένα μάθημα και ξεκίνα!</p>
+        ) : (
+          <>
+            <div className="score-summary">
+              <div>
+                <b>{totalPts}</b>
+                <small>πόντοι (σύνολο ρεκόρ)</small>
+              </div>
+              <div>
+                <b>{all.length}</b>
+                <small>κεφάλαια/τεστ που έπαιξες</small>
+              </div>
+              <div>
+                <b>{totalStars} ★</b>
+                <small>αστέρια</small>
+              </div>
+              <div>
+                <b>{perfect}</b>
+                <small>με 100%</small>
+              </div>
+            </div>
+            <p className="muted">Τα σκορ κρατιούνται σε αυτή τη συσκευή (το καλύτερο σου σε κάθε κεφάλαιο ή τεστ).</p>
+            {rows.map((g) => (
+              <section key={g.title} className="scores-grade">
+                <h2 className="unit-title">
+                  <Icon>{g.icon}</Icon> {g.title}
+                </h2>
+                {g.subjects.map(({ s, items }) => (
+                  <div key={s.key} className="panel scores-subject">
+                    <button className="scores-subject-title" onClick={() => go({ screen: "subject", key: s.key })}>
+                      <span aria-hidden="true">{iconOf(s)}</span> {s.name} ›
+                    </button>
+                    <table className="scores-table">
+                      <thead>
+                        <tr>
+                          <th scope="col">Κεφάλαιο / τεστ</th>
+                          <th scope="col">Ρεκόρ</th>
+                          <th scope="col">Σωστά</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {items.map(({ m, pts, pct }) => (
+                          <tr key={m}>
+                            <td>
+                              {modeEmoji(m)} {modeLabel(s, m)}
+                            </td>
+                            <td>{pts !== undefined ? `${pts} π.` : "—"}</td>
+                            <td>
+                              {pct !== undefined ? (
+                                <>
+                                  {pct}% <Stars percent={pct} />
+                                </>
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+              </section>
+            ))}
+          </>
+        )}
+      </>
+    );
   }
 
   // Κρυφή σελίδα διαχείρισης
@@ -1575,22 +1674,37 @@ function App() {
           />
         </div>
 
-        {installEvent && (
-          <button
-            className="secondary install-btn"
-            onClick={async () => {
-              installEvent.prompt();
-              await installEvent.userChoice.catch(() => null);
-              setInstallEvent(null);
-            }}
-          >
-            📲 Βάλε το Play and Learn στο κινητό σου
+        <div className="home-actions">
+          <button className="primary" onClick={() => go({ screen: "scores" })}>
+            🏆 Τα σκορ μου
           </button>
-        )}
-        {!installEvent && /iPhone|iPad/.test(navigator.userAgent) && !window.navigator.standalone && (
-          <small className="muted">
-            📲 Στο iPhone: πάτα «Κοινοποίηση» και μετά «Προσθήκη στην οθόνη Αφετηρίας», για να το έχεις σαν εφαρμογή.
-          </small>
+          <button
+            className="secondary"
+            aria-expanded={bookmarkHelp}
+            onClick={() => setBookmarkHelp(!bookmarkHelp)}
+          >
+            ⭐ Βάλε σελιδοδείκτη
+          </button>
+        </div>
+        {bookmarkHelp && (
+          <div className="bookmark-help">
+            {/Android/i.test(navigator.userAgent) ? (
+              <p>📱 Στο κινητό (Chrome): πάτα τις <b>⋮</b> πάνω δεξιά και μετά το αστεράκι <b>☆</b>.</p>
+            ) : /iPhone|iPad/.test(navigator.userAgent) ? (
+              <p>
+                📱 Στο iPhone/iPad (Safari): πάτα <b>Κοινοποίηση</b> (το κουτάκι με το βελάκι) και μετά{" "}
+                <b>«Προσθήκη σελιδοδείκτη»</b>.
+              </p>
+            ) : (
+              <p>
+                💻 Στον υπολογιστή: πάτα <b>{/Mac/.test(navigator.platform) ? "⌘ + D" : "Ctrl + D"}</b> ή το
+                αστεράκι <b>☆</b> δίπλα στη διεύθυνση.
+              </p>
+            )}
+            <button className="secondary" onClick={copyLink}>
+              {linkCopied ? "✔ Αντιγράφηκε" : "📋 Αντιγραφή συνδέσμου"}
+            </button>
+          </div>
         )}
 
         <fieldset className="time-choice">
