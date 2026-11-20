@@ -6,6 +6,9 @@
 // POST /api/scores  { key, name, points, correct, total }  -> αποθήκευση σκορ
 // GET  /api/scores?checkName=Νίκος&token=…  -> { ok, status } (έλεγχος ονόματος πριν το παιχνίδι)
 //        status: "free" (ελεύθερο) | "mine" (δικό μου) | "taken" (το έχει άλλος) | "blocked"
+// GET  /api/scores?player=Νίκος&token=…  -> όλα τα σκορ ΕΝΟΣ παίκτη (μόνο από συσκευή που
+//        έχει το όνομα, δηλ. με token του ή αφού έδωσε τον κωδικό): { scores: [{ key, best, correct,
+//        total, plays, time }] } — το καλύτερο σκορ ανά μάθημα/τρόπο
 // POST /api/scores  { action: "claim", name, token, pin }  -> «είμαι εγώ»: με τον 4ψήφιο κωδικό
 //        το όνομα συνδέεται και με αυτή τη συσκευή
 //
@@ -206,6 +209,34 @@ async function readAll() {
   return out.sort((a, b) => b.time - a.time);
 }
 
+// Όλα τα σκορ ενός παίκτη, ομαδοποιημένα ανά κλειδί (μάθημα-τρόπος)
+async function readPlayerScores(norm) {
+  const byKey = new Map();
+  let cursor;
+  do {
+    const page = await list({ prefix: "scores/", cursor, limit: 1000 });
+    for (const blob of page.blobs) {
+      const e = parseBlob(blob);
+      if (!KEY_RE.test(e.key) || normName(e.name) !== norm) continue;
+      const cur = byKey.get(e.key);
+      if (!cur) {
+        byKey.set(e.key, { key: e.key, best: e.points, correct: e.correct, total: e.total, plays: 1, time: e.time });
+        continue;
+      }
+      cur.plays++;
+      cur.time = Math.max(cur.time, e.time);
+      if (e.points > cur.best) cur.best = e.points;
+      // καλύτερο ποσοστό σωστών (μπορεί να είναι άλλο παιχνίδι από το καλύτερο σε πόντους)
+      if (e.correct / e.total > cur.correct / cur.total) {
+        cur.correct = e.correct;
+        cur.total = e.total;
+      }
+    }
+    cursor = page.hasMore ? page.cursor : undefined;
+  } while (cursor);
+  return [...byKey.values()].sort((a, b) => b.time - a.time);
+}
+
 async function readTop(key) {
   const entries = [];
   for (const { prefix, from, to } of sourcesFor(key)) {
@@ -256,6 +287,21 @@ module.exports = async function handler(req, res) {
       if (isBlockedName(name)) return res.status(200).json({ ok: false, status: "blocked" });
       const status = await nameStatus(normName(name), String(req.query.token || ""));
       return res.status(200).json({ ok: true, status });
+    }
+
+    if (req.method === "GET" && req.query.player !== undefined) {
+      const name = cleanName(req.query.player);
+      const norm = normName(name);
+      if (!norm) return res.status(400).json({ error: "Γράψε όνομα" });
+      const status = await nameStatus(norm, String(req.query.token || ""));
+      if (status === "free") return res.status(200).json({ scores: [] });
+      if (status !== "mine") {
+        return res.status(403).json({
+          error: "Αυτό το όνομα είναι συνδεδεμένο με άλλη συσκευή. Γράψε τον κωδικό σου στην αρχική.",
+          code: "taken",
+        });
+      }
+      return res.status(200).json({ scores: await readPlayerScores(norm) });
     }
 
     if (req.method === "GET" && req.query.admin) {

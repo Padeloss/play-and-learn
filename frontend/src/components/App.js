@@ -375,6 +375,10 @@ function App() {
   const [volume, setVolumeState] = useState(() => readStorage(VOLUME_KEY, 0.8));
   const [bookmarkHelp, setBookmarkHelp] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  // «Τα σκορ μου»: έρχονται από τον διακομιστή (ίδια σε κάθε συσκευή του παίκτη)
+  const [myScores, setMyScores] = useState(null);
+  const [myScoresLoading, setMyScoresLoading] = useState(false);
+  const [myScoresError, setMyScoresError] = useState("");
   const [nameBlocked, setNameBlocked] = useState(false); // το όνομα δεν επιτρέπεται στην κατάταξη
   const [nameError, setNameError] = useState("");
   // κατάσταση ονόματος: "" (άγνωστη) | "free" | "mine" | "taken"
@@ -495,6 +499,65 @@ function App() {
     writeStorage(VOLUME_KEY, volume);
     setVolume(volume);
   }, [volume]);
+
+  // «Τα σκορ μου»: φόρτωσε από τον διακομιστή όταν ανοίγει η οθόνη
+  const scoresPlayer = route.screen === "scores" ? name.trim() : "";
+  useEffect(() => {
+    if (route.screen !== "scores") return;
+    setMyScores(null);
+    setMyScoresError("");
+    if (!scoresPlayer || scoresPlayer === TEST_NAME) return;
+    let cancelled = false;
+    setMyScoresLoading(true);
+    fetch(`/api/scores?player=${encodeURIComponent(scoresPlayer)}&token=${encodeURIComponent(deviceToken())}`)
+      .then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.error || "Τα σκορ δεν είναι διαθέσιμα αυτή τη στιγμή.");
+        return data.scores || [];
+      })
+      .then((list) => {
+        if (cancelled) return;
+        setMyScores(list);
+        mergeServerScores(list);
+      })
+      .catch((e) => !cancelled && setMyScoresError(e.message))
+      .finally(() => !cancelled && setMyScoresLoading(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [route.screen, scoresPlayer]);
+
+  // Με το άνοιγμα της εφαρμογής: φέρε τα σκορ του παίκτη από τον διακομιστή, ώστε τα αστεράκια
+  // των κεφαλαίων να είναι ίδια σε κάθε συσκευή.
+  useEffect(() => {
+    const player = name.trim();
+    if (!player || player === TEST_NAME) return;
+    fetch(`/api/scores?player=${encodeURIComponent(player)}&token=${encodeURIComponent(deviceToken())}`)
+      .then((r) => (r.ok ? r.json() : { scores: [] }))
+      .then((d) => mergeServerScores(d.scores || []))
+      .catch(() => {});
+  }, []);
+
+  function mergeServerScores(list) {
+    // τα αστεράκια και τα ρεκόρ των κεφαλαίων ενημερώνονται κι εδώ (π.χ. σε νέα συσκευή)
+    setBest((b) => {
+      const u = { ...b };
+      list.forEach((x) => {
+        if (u[x.key] === undefined || x.best > u[x.key]) u[x.key] = x.best;
+      });
+      writeStorage(BEST_KEY, u);
+      return u;
+    });
+    setProgress((p) => {
+      const u = { ...p };
+      list.forEach((x) => {
+        const pct = Math.round((x.correct / x.total) * 100);
+        if (u[x.key] === undefined || pct > u[x.key]) u[x.key] = pct;
+      });
+      writeStorage(PROGRESS_KEY, u);
+      return u;
+    });
+  }
 
   // Σελιδοδείκτης: οι browsers δεν επιτρέπουν σε μια σελίδα να βάλει μόνη της σελιδοδείκτη,
   // οπότε δείχνουμε οδηγίες για τη συσκευή του παιδιού και κουμπί αντιγραφής του συνδέσμου.
@@ -960,8 +1023,18 @@ function App() {
     return page(<p className="muted">Φόρτωση…</p>);
   }
 
-  // Όλα τα σκορ του παίκτη (από αυτή τη συσκευή)
+  // Όλα τα σκορ του παίκτη (από τον διακομιστή, με το όνομά του)
   if (route.screen === "scores") {
+    const subjects = groups.flatMap((g) => g.subjects.map((s) => ({ s, g })));
+    const found = (myScores || [])
+      .map((x) => {
+        const i = x.key.indexOf("-");
+        const hit = subjects.find(({ s }) => s.key === x.key.slice(0, i));
+        const m = x.key.slice(i + 1);
+        if (!hit || !isValidMode(hit.s, m)) return null;
+        return { ...x, m, s: hit.s, g: hit.g, pct: Math.round((x.correct / x.total) * 100) };
+      })
+      .filter(Boolean);
     const rows = groups
       .map((g) => ({
         title: g.title,
@@ -969,25 +1042,36 @@ function App() {
         subjects: g.subjects
           .map((s) => ({
             s,
-            items: [...modesOf(s), "mistakes"]
-              .map((m) => ({ m, pts: best[boardKey(s, m)], pct: progress[boardKey(s, m)] }))
-              .filter((x) => x.pts !== undefined || x.pct !== undefined),
+            items: modesOf(s)
+              .map((m) => found.find((x) => x.s === s && x.m === m))
+              .filter(Boolean),
           }))
           .filter((x) => x.items.length > 0),
       }))
       .filter((g) => g.subjects.length > 0);
-    const all = rows.flatMap((g) => g.subjects.flatMap((x) => x.items));
-    const totalPts = all.reduce((n, x) => n + (x.pts || 0), 0);
-    const totalStars = all.reduce((n, x) => n + starsOf(x.pct), 0);
-    const perfect = all.filter((x) => x.pct === 100).length;
+    const totalPts = found.reduce((n, x) => n + x.best, 0);
+    const totalStars = found.reduce((n, x) => n + starsOf(x.pct), 0);
+    const plays = found.reduce((n, x) => n + x.plays, 0);
+    const player = name.trim();
     return page(
       <>
         <button className="link back-link" onClick={up}>
           ← Αρχική
         </button>
-        <h1>🏆 Τα σκορ μου{name.trim() ? ` — ${name.trim()}` : ""}</h1>
-        {all.length === 0 ? (
-          <p className="muted">Δεν έχεις παίξει ακόμα. Διάλεξε ένα μάθημα και ξεκίνα!</p>
+        <h1>🏆 Τα σκορ μου{player ? ` — ${player}` : ""}</h1>
+        {!player || player === TEST_NAME ? (
+          <p className="muted">
+            Γράψε το όνομά σου στην αρχική. Τα σκορ σου κρατιούνται με το όνομά σου και τα βλέπεις
+            από όποια συσκευή κι αν παίξεις (σε άλλη συσκευή γράφεις και τον 4ψήφιο κωδικό σου).
+          </p>
+        ) : myScoresLoading || (!myScores && !myScoresError) ? (
+          <p className="muted">Φόρτωση…</p>
+        ) : myScoresError ? (
+          <p className="muted" role="alert">
+            {myScoresError}
+          </p>
+        ) : found.length === 0 ? (
+          <p className="muted">Δεν υπάρχει ακόμα κανένα σκορ με αυτό το όνομα. Διάλεξε ένα μάθημα και ξεκίνα!</p>
         ) : (
           <>
             <div className="score-summary">
@@ -996,19 +1080,22 @@ function App() {
                 <small>πόντοι (σύνολο ρεκόρ)</small>
               </div>
               <div>
-                <b>{all.length}</b>
-                <small>κεφάλαια/τεστ που έπαιξες</small>
+                <b>{found.length}</b>
+                <small>κεφάλαια/τεστ</small>
+              </div>
+              <div>
+                <b>{plays}</b>
+                <small>παιχνίδια</small>
               </div>
               <div>
                 <b>{totalStars} ★</b>
                 <small>αστέρια</small>
               </div>
-              <div>
-                <b>{perfect}</b>
-                <small>με 100%</small>
-              </div>
             </div>
-            <p className="muted">Τα σκορ κρατιούνται σε αυτή τη συσκευή (το καλύτερο σου σε κάθε κεφάλαιο ή τεστ).</p>
+            <p className="muted">
+              Τα σκορ σου είναι αποθηκευμένα με το όνομά σου, όχι στη συσκευή. (Τα τεστ με επιλεγμένα
+              κεφάλαια και «Τα λάθη μου» δεν μετράνε εδώ.)
+            </p>
             {rows.map((g) => (
               <section key={g.title} className="scores-grade">
                 <h2 className="unit-title">
@@ -1028,20 +1115,19 @@ function App() {
                         </tr>
                       </thead>
                       <tbody>
-                        {items.map(({ m, pts, pct }) => (
-                          <tr key={m}>
+                        {items.map((x) => (
+                          <tr key={x.m}>
                             <td>
-                              {modeEmoji(m)} {modeLabel(s, m)}
+                              {modeEmoji(x.m)} {modeLabel(s, x.m)}
+                              <br />
+                              <small className="muted">
+                                {x.plays} {x.plays === 1 ? "φορά" : "φορές"} · τελευταία{" "}
+                                {new Date(x.time).toLocaleDateString("el-GR")}
+                              </small>
                             </td>
-                            <td>{pts !== undefined ? `${pts} π.` : "—"}</td>
+                            <td>{x.best} π.</td>
                             <td>
-                              {pct !== undefined ? (
-                                <>
-                                  {pct}% <Stars percent={pct} />
-                                </>
-                              ) : (
-                                "—"
-                              )}
+                              {x.correct}/{x.total} <Stars percent={x.pct} />
                             </td>
                           </tr>
                         ))}
