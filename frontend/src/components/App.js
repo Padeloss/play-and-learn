@@ -1040,7 +1040,7 @@ function App() {
       .filter((g) => g.subjects.length > 0);
     const totalPts = found.reduce((n, x) => n + x.best, 0);
     const totalStars = found.reduce((n, x) => n + starsOf(x.pct), 0);
-    const plays = found.reduce((n, x) => n + x.plays, 0);
+    const perfect = found.filter((x) => x.pct === 100).length;
     const player = name.trim();
     return page(
       <>
@@ -1073,8 +1073,8 @@ function App() {
                 <small>κεφάλαια/τεστ</small>
               </div>
               <div>
-                <b>{plays}</b>
-                <small>παιχνίδια</small>
+                <b>{perfect}</b>
+                <small>με 100%</small>
               </div>
               <div>
                 <b>{totalStars} ★</b>
@@ -1110,8 +1110,7 @@ function App() {
                               {modeEmoji(x.m)} {modeLabel(s, x.m)}
                               <br />
                               <small className="muted">
-                                {x.plays} {x.plays === 1 ? "φορά" : "φορές"} · τελευταία{" "}
-                                {new Date(x.time).toLocaleDateString("el-GR")}
+                                ρεκόρ στις {new Date(x.time).toLocaleDateString("el-GR")}
                               </small>
                             </td>
                             <td>{x.best} π.</td>
