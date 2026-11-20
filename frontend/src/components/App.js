@@ -527,17 +527,6 @@ function App() {
     };
   }, [route.screen, scoresPlayer]);
 
-  // Με το άνοιγμα της εφαρμογής: φέρε τα σκορ του παίκτη από τον διακομιστή, ώστε τα αστεράκια
-  // των κεφαλαίων να είναι ίδια σε κάθε συσκευή.
-  useEffect(() => {
-    const player = name.trim();
-    if (!player || player === TEST_NAME) return;
-    fetch(`/api/scores?player=${encodeURIComponent(player)}&token=${encodeURIComponent(deviceToken())}`)
-      .then((r) => (r.ok ? r.json() : { scores: [] }))
-      .then((d) => mergeServerScores(d.scores || []))
-      .catch(() => {});
-  }, []);
-
   function mergeServerScores(list) {
     // τα αστεράκια και τα ρεκόρ των κεφαλαίων ενημερώνονται κι εδώ (π.χ. σε νέα συσκευή)
     setBest((b) => {
