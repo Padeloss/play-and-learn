@@ -99,7 +99,7 @@ async function writeJson(pathname, data) {
 // fresh = true: παρακάμπτει την cache (για ανάγνωση πριν από εγγραφή)
 async function readJson(pathname, fresh) {
   if (!baseUrl) return null;
-  const url = `${baseUrl}/${pathname}${fresh ? `?cache=0&v=${Date.now()}` : ""}`;
+  const url = `${baseUrl}/${pathname}${fresh ? `?v=${Date.now()}` : ""}`;
   const r = await fetch(url, fresh ? { cache: "no-store" } : undefined);
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`read ${pathname}: ${r.status}`);
@@ -294,7 +294,7 @@ module.exports = async function handler(req, res) {
     if (req.method === "GET" && req.query.admin) {
       if (!isAdmin(req)) return res.status(401).json({ error: "Λάθος κωδικός" });
       const files = await listAll("pl/");
-      const all = await Promise.all(files.map((b) => fetch(`${b.url}?cache=0`).then((r) => r.json()).catch(() => null)));
+      const all = await Promise.all(files.map((b) => fetch(`${b.url}?v=${Date.now()}`).then((r) => r.json()).catch(() => null)));
       const scores = [];
       const players = [];
       for (const p of all.filter(Boolean)) {
